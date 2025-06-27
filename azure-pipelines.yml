@@ -4,57 +4,59 @@ trigger:
 pr:
   - main
 
-strategy:
-  matrix:
-    Windows:
-      vmImage: 'windows-latest'
-    Ubuntu:
-      vmImage: 'ubuntu-latest'
-    macOS:
-      vmImage: 'macOS-15'
-
-pool:
-  vmImage: $(vmImage)
+parameters:
+  - name: platforms
+    type: object
+    default:
+      # - name: Windows
+      #   image: windows-latest
+      - name: Ubuntu
+        image: ubuntu-latest
+      # - name: macOS
+      #   image: macOS-15
 
 variables:
   buildConfiguration: 'Debug'
   dotnetVersion: '9.0.x'
 
-steps:
+stages:
+  - ${{ each platform in parameters.platforms }}:
+    - stage: BuildAndTest_${{ platform.name }}
+      displayName: '${{ platform.name }}'
+      dependsOn: []
+      jobs:
+        - job: Build_${{ platform.name }}
+          displayName: 'Build on ${{ platform.name }}'
+          pool:
+            vmImage: ${{ platform.image }}
+          steps:
+            - template: azure-template-setup.yml
+            - task: DotNetCoreCLI@2
+              displayName: 'Build solution'
+              inputs:
+                command: 'build'
+                projects: '**/*.sln'
+                arguments: '--configuration $(buildConfiguration)'
 
-  - task: UseDotNet@2
-    displayName: 'Install .NET SDK'
-    inputs:
-      packageType: 'sdk'
-      version: $(dotnetVersion)
-
-  - script: dotnet workload install maui
-    displayName: 'Install .NET MAUI workload'
-
-  - task: DotNetCoreCLI@2
-    displayName: 'Restore dependencies'
-    inputs:
-      command: 'restore'
-
-  - task: DotNetCoreCLI@2
-    displayName: 'Build solution'
-    inputs:
-      command: 'build'
-      projects: '**/*.sln'
-      arguments: '--configuration $(buildConfiguration) --no-restore'
-
-  - task: DotNetCoreCLI@2
-    displayName: 'Run tests'
-    inputs:
-      command: 'test'
-      projects: '**/tests/**/*.csproj'
-      arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
-      publishTestResults: true
-
-  - task: PublishCodeCoverageResults@1
-    displayName: 'Publish code coverage'
-    condition: succeededOrFailed()
-    inputs:
-      codeCoverageTool: 'Cobertura'
-      summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
-      reportDirectory: '$(Agent.TempDirectory)/**/coverage'
+        - job: Test_${{ platform.name }}
+          displayName: 'Tests on ${{ platform.name }}'
+          # dependsOn: Build_${{ platform.name }}
+          pool:
+            vmImage: ${{ platform.image }}
+          steps:
+            - template: azure-template-setup.yml
+            - task: DotNetCoreCLI@2
+              displayName: 'Run tests'
+              inputs:
+                command: 'test'
+                projects: '**/tests/**/*.csproj'
+                arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage"'
+                publishTestResults: true
+            - task: PublishCodeCoverageResults@2
+              displayName: 'Publish code coverage'
+              condition: succeededOrFailed()
+              inputs:
+                codeCoverageTool: 'Cobertura'
+                summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+                reportDirectory: '$(Agent.TempDirectory)/**/coverage'
+                  
