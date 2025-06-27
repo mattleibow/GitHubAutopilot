@@ -1,0 +1,31 @@
+name: "Post PR Failure Comments"
+
+on:
+  check_suite:
+    types: [completed]
+
+jobs:
+  post-failure-comment:
+    runs-on: ubuntu-latest
+    # Only run if the check suite failed and there are associated pull requests
+    if: >
+      github.event.check_suite.conclusion == 'failure' &&
+      github.event.check_suite.pull_requests[0] != null
+    permissions:
+      pull-requests: write
+      checks: read
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Post failure comment
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./.github/scripts/post-failure-comment.ps1 `
+            -Repository "${{ github.repository }}" `
+            -CheckSuiteId "${{ github.event.check_suite.id }}" `
+            -PullRequestNumber ${{ github.event.check_suite.pull_requests[0].number }} `
+            -PullRequestAuthor "${{ github.event.check_suite.pull_requests[0].user.login }}"
