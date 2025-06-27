@@ -49,7 +49,7 @@ stages:
                 arguments: '--configuration $(buildConfiguration)'
 
         - job: Test_${{ platform.name }}
-          displayName: 'Run tests on ${{ platform.name }}'
+          displayName: 'Tests on ${{ platform.name }}'
           dependsOn: Build_${{ platform.name }}
           pool:
             vmImage: ${{ platform.image }}
