@@ -52,7 +52,8 @@ Write-Host "Processing failed check suite $CheckSuiteId for PR #$PullRequestNumb
 
 try {
     # Fetch Check Runs
-    $checkRunsResponse = gh api "repos/$Repository/check-suites/$CheckSuiteId/check-runs" `
+    $checkRunsResponse = gh api `
+        "repos/$Repository/check-suites/$CheckSuiteId/check-runs" `
         -H "Accept: application/vnd.github+json"
     $checkRunsJson = $checkRunsResponse | ConvertFrom-Json
 
@@ -74,7 +75,9 @@ try {
             # Get Annotations (if any)
             if ($checkRun.output.annotations_url) {
                 try {
-                    $annotationsResponse = gh api $checkRun.output.annotations_url -H "Accept: application/vnd.github+json"
+                    $annotationsResponse = gh api `
+                        $checkRun.output.annotations_url `
+                        -H "Accept: application/vnd.github+json"
                     $annotations = $annotationsResponse | ConvertFrom-Json
                     
                     if ($annotations -and $annotations.Count -gt 0) {
