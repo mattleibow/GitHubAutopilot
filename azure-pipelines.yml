@@ -8,12 +8,12 @@ parameters:
   - name: platforms
     type: object
     default:
-      # - name: Windows
-      #   image: windows-latest
+      - name: Windows
+        image: windows-latest
       - name: Ubuntu
         image: ubuntu-latest
-      # - name: macOS
-      #   image: macOS-15
+      - name: macOS
+        image: macOS-15
 
 variables:
   buildConfiguration: 'Debug'
