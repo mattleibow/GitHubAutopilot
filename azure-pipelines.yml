@@ -65,7 +65,7 @@ stages:
                 projects: '**/tests/**/*.csproj'
                 arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage"'
                 publishTestResults: true
-            - task: PublishCodeCoverageResults@1
+            - task: PublishCodeCoverageResults@2
               displayName: 'Publish code coverage'
               condition: succeededOrFailed()
               inputs:
