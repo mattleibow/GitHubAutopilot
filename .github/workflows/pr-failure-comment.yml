@@ -16,7 +16,7 @@ jobs:
       checks: read
       contents: read
     steps:
-      - script: Print all
+      - name: Print all
         shell: pwsh
         run: echo "${{ github }}"
 
