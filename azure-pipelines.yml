@@ -20,51 +20,50 @@ variables:
   dotnetVersion: '9.0.x'
 
 stages:
-  - stage: BuildAndTest
-    displayName: 'Build and Test'
-    jobs:
-      - ${{ each platform in parameters.platforms }}:
+  - ${{ each platform in parameters.platforms }}:
+    - stage: BuildAndTest-${{ platform.name }}
+      displayName: 'Build and Test on ${{ platform.name }}'
+      jobs:
+        - job: Build_${{ platform.name }}
+          displayName: 'Build on ${{ platform.name }}'
+          pool:
+            vmImage: ${{ platform.image }}
+          steps:
+            - task: UseDotNet@2
+              displayName: 'Install .NET SDK'
+              inputs:
+                packageType: 'sdk'
+                version: $(dotnetVersion)
+            - script: dotnet workload install maui
+              displayName: 'Install .NET MAUI workload'
+            - task: DotNetCoreCLI@2
+              displayName: 'Build solution'
+              inputs:
+                command: 'build'
+                projects: '**/*.sln'
+                arguments: '--configuration $(buildConfiguration)'
 
-          - job: Build_${{ platform.name }}
-            displayName: 'Build on ${{ platform.name }}'
-            pool:
-              vmImage: ${{ platform.image }}
-            steps:
-              - task: UseDotNet@2
-                displayName: 'Install .NET SDK'
-                inputs:
-                  packageType: 'sdk'
-                  version: $(dotnetVersion)
-              - script: dotnet workload install maui
-                displayName: 'Install .NET MAUI workload'
-              - task: DotNetCoreCLI@2
-                displayName: 'Build solution'
-                inputs:
-                  command: 'build'
-                  projects: '**/*.sln'
-                  arguments: '--configuration $(buildConfiguration)'
-
-          - job: Test_${{ platform.name }}
-            displayName: 'Run tests on ${{ platform.name }}'
-            pool:
-              vmImage: ${{ platform.image }}
-            steps:
-              - task: UseDotNet@2
-                displayName: 'Install .NET SDK'
-                inputs:
-                  packageType: 'sdk'
-                  version: $(dotnetVersion)
-              - task: DotNetCoreCLI@2
-                displayName: 'Run tests'
-                inputs:
-                  command: 'test'
-                  projects: '**/tests/**/*.csproj'
-                  arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage"'
-                  publishTestResults: true
-              - task: PublishCodeCoverageResults@1
-                displayName: 'Publish code coverage'
-                condition: succeededOrFailed()
-                inputs:
-                  codeCoverageTool: 'Cobertura'
-                  summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
-                  reportDirectory: '$(Agent.TempDirectory)/**/coverage'
+        - job: Test_${{ platform.name }}
+          displayName: 'Run tests on ${{ platform.name }}'
+          pool:
+            vmImage: ${{ platform.image }}
+          steps:
+            - task: UseDotNet@2
+              displayName: 'Install .NET SDK'
+              inputs:
+                packageType: 'sdk'
+                version: $(dotnetVersion)
+            - task: DotNetCoreCLI@2
+              displayName: 'Run tests'
+              inputs:
+                command: 'test'
+                projects: '**/tests/**/*.csproj'
+                arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage"'
+                publishTestResults: true
+            - task: PublishCodeCoverageResults@1
+              displayName: 'Publish code coverage'
+              condition: succeededOrFailed()
+              inputs:
+                codeCoverageTool: 'Cobertura'
+                summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+                reportDirectory: '$(Agent.TempDirectory)/**/coverage'
