@@ -55,8 +55,6 @@ stages:
                 inputs:
                   packageType: 'sdk'
                   version: $(dotnetVersion)
-              - script: dotnet workload install maui
-                displayName: 'Install .NET MAUI workload'
               - task: DotNetCoreCLI@2
                 displayName: 'Run tests'
                 inputs:
