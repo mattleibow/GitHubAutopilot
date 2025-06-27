@@ -23,7 +23,7 @@ jobs:
       - name: Post failure comment
         shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BUILD_STATUS_COMMENT || secrets.GITHUB_TOKEN }}
         run: |
           ./.github/scripts/post-failure-comment.ps1 `
             -Repository "${{ github.repository }}" `
