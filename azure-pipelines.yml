@@ -50,6 +50,7 @@ stages:
 
         - job: Test_${{ platform.name }}
           displayName: 'Run tests on ${{ platform.name }}'
+          dependsOn: Build_${{ platform.name }}
           pool:
             vmImage: ${{ platform.image }}
           steps:
@@ -58,6 +59,12 @@ stages:
               inputs:
                 packageType: 'sdk'
                 version: $(dotnetVersion)
+            - script: dotnet workload install maui-android
+              displayName: 'Install .NET MAUI workload for Linux'
+              condition: eq(variables['Agent.OS'], 'Linux')
+            - script: dotnet workload install maui
+              displayName: 'Install .NET MAUI workload for Windows and macOS'
+              condition: ne(variables['Agent.OS'], 'Linux')
             - task: DotNetCoreCLI@2
               displayName: 'Run tests'
               inputs:
