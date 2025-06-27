@@ -3,17 +3,23 @@
 
 trigger:
 - main
-- develop
 
 pr:
 - main
-- develop
 
+strategy:
+  matrix:
+    Windows:
+      vmImage: 'windows-latest'
+    Ubuntu:
+      vmImage: 'ubuntu-latest'
+    macOS:
+      vmImage: 'macOS-15'
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: $(vmImage)
 
 variables:
-  buildConfiguration: 'Release'
+  buildConfiguration: 'Debug'
   dotnetVersion: '9.0.x'
 
 steps:
@@ -22,7 +28,6 @@ steps:
   inputs:
     packageType: 'sdk'
     version: $(dotnetVersion)
-    includePreviewVersions: true
 
 - script: dotnet workload install maui
   displayName: 'Install .NET MAUI workload'
@@ -31,8 +36,6 @@ steps:
   displayName: 'Restore dependencies'
   inputs:
     command: 'restore'
-    projects: '**/*.csproj'
-    verbosityRestore: 'minimal'
 
 - task: DotNetCoreCLI@2
   displayName: 'Build solution'
