@@ -37,6 +37,7 @@ try {
         "repos/$Repository/pulls/$PullRequestNumber" `
         -H "Accept: application/vnd.github+json"
     $prInfoJson = $prInfoResponse | ConvertFrom-Json
+
     $PullRequestAuthor = $prInfoJson.user.login
     Write-Host "Fetched PR author: $PullRequestAuthor"
 } catch {
@@ -45,10 +46,8 @@ try {
 }
 
 # Check if this is a bot/AI-created PR
-$botUsers = @("dependabot[bot]", "github-copilot[bot]", "copilot")
-$isBotPR = $PullRequestAuthor -in $botUsers -or 
-           $PullRequestAuthor -like "*[bot]" -or 
-           $PullRequestAuthor -like "*copilot*"
+$botUsers = @("Copilot")
+$isBotPR = $PullRequestAuthor -in $botUsers
 
 if (-not $isBotPR) {
     Write-Host "PR #$PullRequestNumber not created by a bot or Copilot user ($PullRequestAuthor). Skipping comment."
@@ -138,7 +137,7 @@ $failedJobsText
 $errorMessagesText
 ``````
 
-@github-copilot Please analyze these build failures and suggest fixes. Focus on:
+@$PullRequestAuthor Please analyze these build failures and suggest fixes. Focus on:
 1. Understanding the root cause of each failure
 2. Providing specific code changes to resolve the issues  
 3. Ensuring the fixes maintain code quality and don't break existing functionality
