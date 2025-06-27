@@ -35,12 +35,12 @@ stages:
               inputs:
                 packageType: 'sdk'
                 version: $(dotnetVersion)
-            - ${{ if eq(variables['Agent.OS'], 'Linux') }}:
-              - script: dotnet workload install maui-android
-                displayName: 'Install .NET MAUI workload'
-            - ${{ else }}:
-              - script: dotnet workload install maui
-                displayName: 'Install .NET MAUI workload'
+            - script: dotnet workload install maui-android
+              displayName: 'Install .NET MAUI workload for Linux'
+              condition: eq(variables['Agent.OS'], 'Linux')
+            - script: dotnet workload install maui
+              displayName: 'Install .NET MAUI workload for Windows and macOS'
+              condition: ne(variables['Agent.OS'], 'Linux')
             - task: DotNetCoreCLI@2
               displayName: 'Build solution'
               inputs:
