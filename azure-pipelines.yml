@@ -30,17 +30,7 @@ stages:
           pool:
             vmImage: ${{ platform.image }}
           steps:
-            - task: UseDotNet@2
-              displayName: 'Install .NET SDK'
-              inputs:
-                packageType: 'sdk'
-                version: $(dotnetVersion)
-            - script: dotnet workload install maui-android
-              displayName: 'Install .NET MAUI workload for Linux'
-              condition: eq(variables['Agent.OS'], 'Linux')
-            - script: dotnet workload install maui
-              displayName: 'Install .NET MAUI workload for Windows and macOS'
-              condition: ne(variables['Agent.OS'], 'Linux')
+            - template: azure-template-setup.yml
             - task: DotNetCoreCLI@2
               displayName: 'Build solution'
               inputs:
@@ -54,17 +44,7 @@ stages:
           pool:
             vmImage: ${{ platform.image }}
           steps:
-            - task: UseDotNet@2
-              displayName: 'Install .NET SDK'
-              inputs:
-                packageType: 'sdk'
-                version: $(dotnetVersion)
-            - script: dotnet workload install maui-android
-              displayName: 'Install .NET MAUI workload for Linux'
-              condition: eq(variables['Agent.OS'], 'Linux')
-            - script: dotnet workload install maui
-              displayName: 'Install .NET MAUI workload for Windows and macOS'
-              condition: ne(variables['Agent.OS'], 'Linux')
+            - template: azure-template-setup.yml
             - task: DotNetCoreCLI@2
               displayName: 'Run tests'
               inputs:
@@ -79,3 +59,4 @@ stages:
                 codeCoverageTool: 'Cobertura'
                 summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
                 reportDirectory: '$(Agent.TempDirectory)/**/coverage'
+                  
