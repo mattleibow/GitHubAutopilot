@@ -16,6 +16,8 @@ jobs:
       checks: read
       contents: read
     steps:
+      - script: echo "${{ github }}"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
