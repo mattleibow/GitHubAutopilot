@@ -16,7 +16,9 @@ jobs:
       checks: read
       contents: read
     steps:
-      - script: echo "${{ github }}"
+      - script: Print all
+        shell: pwsh
+        run: echo "${{ github }}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
