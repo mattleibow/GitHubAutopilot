@@ -16,11 +16,8 @@
 .PARAMETER PullRequestNumber
     The PR number to comment on
 
-.PARAMETER PullRequestAuthor
-    The author of the PR (used to filter for bot/AI-created PRs)
-
 .EXAMPLE
-    ./post-failure-comment.ps1 -Repository "owner/repo" -CheckSuiteId 123456 -PullRequestNumber 42 -PullRequestAuthor "github-copilot[bot]"
+    ./post-failure-comment.ps1 -Repository "owner/repo" -CheckSuiteId 123456 -PullRequestNumber 42
 #>
 
 param(
@@ -32,10 +29,20 @@ param(
     
     [Parameter(Mandatory = $true)]
     [int]$PullRequestNumber,
-    
-    [Parameter(Mandatory = $true)]
-    [string]$PullRequestAuthor
 )
+
+# Fetch PR information to get the author dynamically
+try {
+    $prInfoResponse = gh api `
+        "repos/$Repository/pulls/$PullRequestNumber" `
+        -H "Accept: application/vnd.github+json"
+    $prInfoJson = $prInfoResponse | ConvertFrom-Json
+    $PullRequestAuthor = $prInfoJson.user.login
+    Write-Host "Fetched PR author: $PullRequestAuthor"
+} catch {
+    Write-Error "Failed to fetch PR information: $($_.Exception.Message)"
+    exit 1
+}
 
 # Check if this is a bot/AI-created PR
 $botUsers = @("dependabot[bot]", "github-copilot[bot]", "copilot")
@@ -63,47 +70,48 @@ try {
 
     # Loop through Failed Runs
     foreach ($checkRun in $checkRunsJson.check_runs) {
-        if ($checkRun.conclusion -ne "success" -and $null -ne $checkRun.conclusion) {
-            
-            # Build job description
-            $jobDescription = "- [$($checkRun.name)]($($checkRun.details_url))"
-            if ($checkRun.output.summary) {
-                $jobDescription += " - $($checkRun.output.summary)"
-            }
-            $failedJobs += $jobDescription
+        if ($checkRun.conclusion -eq "success" -or $checkRun.conclusion -eq $null) {
+            continue
+        }
 
-            # Get Annotations (if any)
-            if ($checkRun.output.annotations_url) {
-                try {
-                    $annotationsResponse = gh api `
-                        $checkRun.output.annotations_url `
-                        -H "Accept: application/vnd.github+json"
-                    $annotations = $annotationsResponse | ConvertFrom-Json
-                    
-                    if ($annotations -and $annotations.Count -gt 0) {
-                        foreach ($annotation in $annotations) {
-                            if ($annotation.path -and $annotation.message) {
-                                $normalizedPath = $annotation.path -replace "\\", "/"
-                                if ($annotation.message.StartsWith($annotation.path)) {
-                                    $messageWithoutPath = $annotation.message.Substring($annotation.path.Length).TrimStart(':', ' ')
-                                    $errorMessages += "$normalizedPath`: $messageWithoutPath"
-                                } else {
-                                    $errorMessages += "$normalizedPath`: $($annotation.message)"
-                                }
-                            } elseif ($annotation.message) {
-                                $errorMessages += $annotation.message
+        # Build job description
+        $jobDescription = "- [$($checkRun.name)]($($checkRun.details_url))"
+        if ($checkRun.output.summary) {
+            $jobDescription += " - $($checkRun.output.summary)"
+        }
+        $failedJobs += $jobDescription
+
+        # Get Annotations (if any)
+        if ($checkRun.output.annotations_url) {
+            try {
+                $annotationsResponse = gh api `
+                    $checkRun.output.annotations_url `
+                    -H "Accept: application/vnd.github+json"
+                $annotations = $annotationsResponse | ConvertFrom-Json
+
+                if ($annotations -and $annotations.Count -gt 0) {
+                    foreach ($annotation in $annotations) {
+                        if ($annotation.path -and $annotation.message) {
+                            $normalizedPath = $annotation.path -replace "\\", "/"
+                            if ($annotation.message.StartsWith($annotation.path)) {
+                                $messageWithoutPath = $annotation.message.Substring($annotation.path.Length).TrimStart(':', ' ')
+                                $errorMessages += "$normalizedPath`: $messageWithoutPath"
+                            } else {
+                                $errorMessages += "$normalizedPath`: $($annotation.message)"
                             }
+                        } elseif ($annotation.message) {
+                            $errorMessages += $annotation.message
                         }
                     }
-                } catch {
-                    Write-Warning "Failed to fetch annotations for $($checkRun.name): $($_.Exception.Message)"
                 }
+            } catch {
+                Write-Warning "Failed to fetch annotations for $($checkRun.name): $($_.Exception.Message)"
             }
+        }
 
-            # Also check for output text/summary as error details
-            if ($checkRun.output.text -and $checkRun.output.text.Trim()) {
-                $errorMessages += "From $($checkRun.name): $($checkRun.output.text)"
-            }
+        # Also check for output text/summary as error details
+        if ($checkRun.output.text -and $checkRun.output.text.Trim()) {
+            $errorMessages += "From $($checkRun.name): $($checkRun.output.text)"
         }
     }
 
