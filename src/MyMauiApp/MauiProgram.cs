@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using MyMauiLibrary;
+using MyMauiLibrary.ViewModels;
 
 namespace MyMauiApp;
 
@@ -17,6 +18,7 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddTransient<MainPage>();
+		builder.Services.AddTransient<MainPageViewModel>();
 		builder.Services.AddSingleton<IPlatformService, PlatformService>();
 
 #if DEBUG

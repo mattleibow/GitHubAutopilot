@@ -5,10 +5,6 @@
              x:Class="MyMauiApp.MainPage"
              x:DataType="vm:MainPageViewModel">
 
-    <ContentPage.BindingContext>
-        <vm:MainPageViewModel />
-    </ContentPage.BindingContext>
-
     <ScrollView>
         <VerticalStackLayout
             Padding="30,0"
@@ -35,6 +31,11 @@
                 SemanticProperties.Hint="Counts the number of times you click"
                 Command="{Binding CounterClickedCommand}"
                 HorizontalOptions="Fill" />
+
+            <Label
+                Text="{Binding SomethingResult}"
+                Style="{StaticResource SubHeadline}" />
+
         </VerticalStackLayout>
     </ScrollView>
 

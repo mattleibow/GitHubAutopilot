@@ -5,10 +5,10 @@ namespace MyMauiApp;
 
 public partial class MainPage : ContentPage
 {
-    public MainPage(IPlatformService platformService)
+    public MainPage(MainPageViewModel viewModel)
     {
         InitializeComponent();
 
-        BindingContext = new MainPageViewModel(platformService);
+        BindingContext = viewModel;
     }
 }

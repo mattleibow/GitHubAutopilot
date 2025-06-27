@@ -10,8 +10,6 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty]
     private string _somethingResult = string.Empty;
 
-    public MainPageViewModel() {}
-
     public MainPageViewModel(IPlatformService platformService)
     {
         _service = platformService;
