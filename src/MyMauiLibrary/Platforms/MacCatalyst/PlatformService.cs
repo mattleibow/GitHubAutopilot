@@ -1,4 +1,6 @@
-﻿namespace MyMauiLibrary;
+﻿using UIKit;
+
+namespace MyMauiLibrary;
 
 public class PlatformService : IPlatformService
 {
@@ -6,7 +8,7 @@ public class PlatformService : IPlatformService
     {
         // macOS-specific implementation
 
-        SomethingResult = "macOS-specific result";
+        SomethingResult = $"macOS-specific result (OS version: {UIDevice.Current.SystemVersion})";
     }
 
     public string SomethingResult { get; private set; } = "Nothing yet";
