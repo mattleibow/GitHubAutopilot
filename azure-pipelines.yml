@@ -21,7 +21,7 @@ variables:
 
 stages:
   - ${{ each platform in parameters.platforms }}:
-    - stage: BuildAndTest-${{ platform.name }}
+    - stage: BuildAndTest_${{ platform.name }}
       displayName: 'Build and Test on ${{ platform.name }}'
       jobs:
         - job: Build_${{ platform.name }}
