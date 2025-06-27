@@ -16,9 +16,6 @@ jobs:
       checks: read
       contents: read
     steps:
-      - name: Print all
-        shell: pwsh
-        run: echo "${{ toJSON(github) }}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
