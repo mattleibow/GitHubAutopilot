@@ -22,7 +22,7 @@ variables:
 stages:
   - ${{ each platform in parameters.platforms }}:
     - stage: BuildAndTest_${{ platform.name }}
-      displayName: 'Build and Test on ${{ platform.name }}'
+      displayName: '${{ platform.name }}'
       dependsOn: []
       jobs:
         - job: Build_${{ platform.name }}
