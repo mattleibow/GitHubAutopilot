@@ -1,11 +1,8 @@
-# Azure Pipelines CI/CD for GitHubAutopilot
-# Build the solution and run tests
-
 trigger:
-- main
+  - main
 
 pr:
-- main
+  - main
 
 strategy:
   matrix:
@@ -15,6 +12,7 @@ strategy:
       vmImage: 'ubuntu-latest'
     macOS:
       vmImage: 'macOS-15'
+
 pool:
   vmImage: $(vmImage)
 
@@ -23,39 +21,40 @@ variables:
   dotnetVersion: '9.0.x'
 
 steps:
-- task: UseDotNet@2
-  displayName: 'Install .NET SDK'
-  inputs:
-    packageType: 'sdk'
-    version: $(dotnetVersion)
 
-- script: dotnet workload install maui
-  displayName: 'Install .NET MAUI workload'
+  - task: UseDotNet@2
+    displayName: 'Install .NET SDK'
+    inputs:
+      packageType: 'sdk'
+      version: $(dotnetVersion)
 
-- task: DotNetCoreCLI@2
-  displayName: 'Restore dependencies'
-  inputs:
-    command: 'restore'
+  - script: dotnet workload install maui
+    displayName: 'Install .NET MAUI workload'
 
-- task: DotNetCoreCLI@2
-  displayName: 'Build solution'
-  inputs:
-    command: 'build'
-    projects: '**/*.sln'
-    arguments: '--configuration $(buildConfiguration) --no-restore'
+  - task: DotNetCoreCLI@2
+    displayName: 'Restore dependencies'
+    inputs:
+      command: 'restore'
 
-- task: DotNetCoreCLI@2
-  displayName: 'Run tests'
-  inputs:
-    command: 'test'
-    projects: '**/tests/**/*.csproj'
-    arguments: '--configuration $(buildConfiguration) --no-build --verbosity normal --collect:"XPlat Code Coverage"'
-    publishTestResults: true
+  - task: DotNetCoreCLI@2
+    displayName: 'Build solution'
+    inputs:
+      command: 'build'
+      projects: '**/*.sln'
+      arguments: '--configuration $(buildConfiguration) --no-restore'
 
-- task: PublishCodeCoverageResults@1
-  displayName: 'Publish code coverage'
-  inputs:
-    codeCoverageTool: 'Cobertura'
-    summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
-    reportDirectory: '$(Agent.TempDirectory)/**/coverage'
-  condition: succeededOrFailed()
+  - task: DotNetCoreCLI@2
+    displayName: 'Run tests'
+    inputs:
+      command: 'test'
+      projects: '**/tests/**/*.csproj'
+      arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
+      publishTestResults: true
+
+  - task: PublishCodeCoverageResults@1
+    displayName: 'Publish code coverage'
+    condition: succeededOrFailed()
+    inputs:
+      codeCoverageTool: 'Cobertura'
+      summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+      reportDirectory: '$(Agent.TempDirectory)/**/coverage'
