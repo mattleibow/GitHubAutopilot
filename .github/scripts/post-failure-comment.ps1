@@ -28,7 +28,7 @@ param(
     [string]$CheckSuiteId,
     
     [Parameter(Mandatory = $true)]
-    [int]$PullRequestNumber,
+    [int]$PullRequestNumber
 )
 
 # Fetch PR information to get the author dynamically
