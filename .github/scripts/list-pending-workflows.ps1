@@ -8,6 +8,9 @@
     and highlights the ones that are pending, queued, waiting, or in other
     non-final states. It shows workflows triggered by any event (PRs, pushes,
     manual triggers, scheduled events, etc.).
+    
+    The script specifically detects workflows that are "awaiting approval from a maintainer"
+    by checking for status="completed" with conclusion="action_required".
 
 .PARAMETER Repository
     The GitHub repository in the format "owner/repo". If not provided, uses the current repository.
@@ -162,14 +165,19 @@ function Get-WorkflowCategories {
     $completed = @()
     
     foreach ($run in $workflowRuns) {
-        switch ($run.status) {
-            "queued" { $pending += $run }
-            "pending" { $pending += $run }
-            "waiting" { $pending += $run }
-            "requested" { $pending += $run }
-            "in_progress" { $running += $run }
-            "completed" { $completed += $run }
-            default { $completed += $run }
+        # Check if workflow needs action (e.g., awaiting approval from maintainer)
+        # These workflows have status="completed" but conclusion="action_required"
+        $needsAction = ($run.status -eq "completed" -and $run.conclusion -eq "action_required")
+        
+        # Check for workflows that are explicitly waiting/pending
+        $isWaiting = ($run.status -in @("queued", "pending", "waiting", "requested"))
+        
+        if ($needsAction -or $isWaiting) {
+            $pending += $run
+        } elseif ($run.status -eq "in_progress") {
+            $running += $run
+        } else {
+            $completed += $run
         }
     }
     
@@ -268,7 +276,8 @@ try {
                 foreach ($run in $categories.Pending) {
                     $branch = if ($run.head_branch) { $run.head_branch } else { "N/A" }
                     $created = ([DateTime]::Parse($run.created_at)).ToString("yyyy-MM-dd HH:mm")
-                    Write-Host "$($run.id) | $($run.name) | $($run.status) | $($run.event) | $branch | $created" -ForegroundColor Red
+                    $statusText = if ($run.conclusion -eq "action_required") { "action_required" } else { $run.status }
+                    Write-Host "$($run.id) | $($run.name) | $statusText | $($run.event) | $branch | $created" -ForegroundColor Red
                 }
             }
             
@@ -295,7 +304,11 @@ try {
                 foreach ($run in $categories.Pending) {
                     Write-Host "`n🔴 Workflow: $($run.name)" -ForegroundColor Red
                     Write-Host "   ID: $($run.id)" -ForegroundColor Gray
-                    Write-Host "   Status: $($run.status)" -ForegroundColor Red
+                    if ($run.conclusion -eq "action_required") {
+                        Write-Host "   Status: action_required (awaiting approval)" -ForegroundColor Red
+                    } else {
+                        Write-Host "   Status: $($run.status)" -ForegroundColor Red
+                    }
                     Write-Host "   Event: $($run.event)" -ForegroundColor Gray
                     if ($run.head_branch) {
                         Write-Host "   Branch: $($run.head_branch)" -ForegroundColor Gray
