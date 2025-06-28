@@ -1,126 +1,106 @@
-# GitHub Scripts
+# GitHub Workflow Status Script
 
-This directory contains PowerShell scripts for GitHub automation and monitoring.
+This script lists all workflow runs in a GitHub repository and highlights pending ones.
 
-## Scripts
+## Features
 
-### list-pending-approvals.ps1
+- **Lists ALL workflow runs** (not just PR-triggered ones)
+- **Highlights pending workflows** in queued, pending, waiting, or requested states
+- **Shows running workflows** with duration information
+- **Multiple output formats**: detailed, table, and JSON
+- **Works with any trigger type**: PRs, pushes, manual triggers, scheduled events, etc.
 
-Lists all pull requests with checks that are waiting to run.
-
-#### Prerequisites
-- PowerShell 5.1 or later (or PowerShell Core 6+)
-- [GitHub CLI](https://cli.github.com/) installed and authenticated
-
-#### Usage
+## Usage
 
 ```powershell
-# List PRs with pending checks for current repository (detailed format)
-./list-pending-approvals.ps1
+# Basic usage - detailed output
+./.github/scripts/list-pending-workflows.ps1
 
-# List PRs with pending checks for specific repository
-./list-pending-approvals.ps1 -Repository "owner/repo"
+# Table format for quick overview
+./.github/scripts/list-pending-workflows.ps1 -OutputFormat "table"
 
-# List PRs with pending checks in table format
-./list-pending-approvals.ps1 -OutputFormat "table"
+# JSON for automation
+./.github/scripts/list-pending-workflows.ps1 -OutputFormat "json"
 
-# List PRs with pending checks in JSON format
-./list-pending-approvals.ps1 -OutputFormat "json"
+# Limit results
+./.github/scripts/list-pending-workflows.ps1 -PerPage 20 -MaxPages 3
 ```
 
-#### Parameters
+## Sample Output
 
-- **Repository** (optional): The GitHub repository in format "owner/repo". If not provided, uses current repository.
-- **OutputFormat** (optional): Output format - "detailed" (default), "table", or "json".
-
-#### Output
-
-The script identifies PRs with checks that are:
-- In "queued", "pending", "waiting", or "requested" status (haven't started running)
-- Required by branch protection but missing entirely
-- Status checks showing "pending" state
-
-This helps identify workflow bottlenecks where builds or other checks haven't started yet.
-
-#### Examples
-
-**Detailed Output:**
+### Detailed Format
 ```
-📋 PR #123: Add new feature
-   Author: developer
-   URL: https://github.com/owner/repo/pull/123
-   Branch: feature-branch → main
-   Created: 2025-01-01T10:00:00Z
+🔄 Listing all workflow runs and highlighting pending ones...
+Repository: mattleibow/GitHubAutopilot
+Found 15 workflow run(s). Categorizing by status...
 
-   ⏳ Pending Checks:
-   • CI Build
-     Status: queued
-     Type: check_run
-     URL: https://github.com/owner/repo/actions/runs/456789
-     Created: 2025-01-01T10:05:00Z
-   
-   • Code Quality
-     Status: pending
-     Type: status
-     Description: Waiting for checks to complete
-```
+📊 Workflow Runs Summary:
+Pending: 2
+Running: 1
+Completed: 12
+Total: 15
 
-**Table Output:**
-```
-PR | Title | Pending Checks
----|-------|---------------
-#123 | Add new feature | CI Build (queued), Code Quality (pending)
-#124 | Fix bug | Unit Tests (missing), Deploy (queued)
+⏳ PENDING WORKFLOW RUNS:
+
+🔴 Workflow: CI
+   ID: 12345678
+   Status: queued
+   Event: pull_request
+   Branch: feature-branch
+   Triggered by: developer
+   Created: 2025-06-28T10:30:00Z
+   URL: https://github.com/owner/repo/actions/runs/12345678
+
+🏃 RUNNING WORKFLOW RUNS:
+
+🟡 Workflow: Deploy
+   ID: 12345679
+   Status: in_progress
+   Event: push
+   Branch: main
+   Triggered by: maintainer
+   Started: 2025-06-28T10:25:00Z
+   Duration: 5m 30s
+   URL: https://github.com/owner/repo/actions/runs/12345679
 ```
 
-### test-list-pending-approvals.ps1
+### Table Format
+```
+📊 Workflow Runs Summary:
+Pending: 2
+Running: 1
+Completed: 12
 
-Unit tests for the `list-pending-approvals.ps1` script functionality.
-
-```powershell
-# Run tests
-./test-list-pending-approvals.ps1
+⏳ PENDING WORKFLOW RUNS:
+ID | Workflow | Status | Event | Branch | Created
+---|----------|--------|-------|--------|--------
+12345678 | CI | queued | pull_request | feature-branch | 2025-06-28 10:30
+12345679 | Build | pending | push | main | 2025-06-28 10:28
 ```
 
-### post-failure-comment.ps1
+## Prerequisites
 
-Posts comments on PRs when Azure pipeline builds fail (existing script).
+- PowerShell 5.1+ or PowerShell Core 6+
+- GitHub CLI (`gh`) installed and authenticated
+- Read access to repository and actions
 
-## Setup
+## Authentication
 
-1. Install GitHub CLI:
-   ```bash
-   # On macOS
-   brew install gh
-   
-   # On Windows
-   winget install GitHub.cli
-   
-   # On Linux
-   # See https://github.com/cli/cli/blob/trunk/docs/install_linux.md
-   ```
+### Local Development
+```bash
+gh auth login
+```
 
-2. Authenticate with GitHub:
-   ```bash
-   gh auth login
-   ```
+### GitHub Actions
+```yaml
+env:
+  GH_TOKEN: ${{ github.token }}
+```
 
-3. Run the scripts from the repository root:
-   ```powershell
-   ./.github/scripts/list-pending-approvals.ps1
-   ```
+## Parameters
 
-## Troubleshooting
-
-**Error: "GitHub CLI is not authenticated"**
-- Run `gh auth login` and follow the prompts
-- Ensure you have appropriate permissions to access the repository
-
-**Error: "Could not determine current repository"**
-- Make sure you're running the script from within a git repository
-- Or specify the repository explicitly with `-Repository "owner/repo"`
-
-**Error: "Failed to fetch PR and workflow information"**
-- Check your internet connection
-- Verify repository exists and you have access
-- Ensure GitHub CLI is properly configured
+- **Repository**: GitHub repository in "owner/repo" format (auto-detected if not provided)
+- **OutputFormat**: "detailed", "table", or "json" (default: "detailed")
+- **PerPage**: Number of runs per page, 1-100 (default: 50)
+- **MaxPages**: Maximum pages to fetch, 1-20 (default: 5)
+- **Help**: Show detailed help information
