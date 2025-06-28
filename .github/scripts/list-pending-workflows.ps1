@@ -19,19 +19,44 @@ param(
     [string]$Repository
 )
 
+# Function to get PR information for a workflow run
+function Get-PRInfo {
+    param($run)
+    
+    # For pull_request events, the number field contains the PR number
+    if ($run.event -eq "pull_request" -and $run.number) {
+        return "PR #$($run.number)"
+    }
+    
+    # For other events, try to find PR by matching head SHA
+    if ($run.headSha) {
+        try {
+            $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid | ConvertFrom-Json
+            $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
+            if ($matchingPR) {
+                return "PR #$($matchingPR.number)"
+            }
+        } catch {
+            # Ignore errors when trying to find PR
+        }
+    }
+    
+    return $null
+}
+
 Write-Host "🔄 Checking for workflows needing approval..." -ForegroundColor Cyan
 Write-Host "Repository: $Repository" -ForegroundColor Green
 
 # Get workflows that need action (awaiting approval)
 Write-Host "`nChecking for workflows awaiting approval..." -ForegroundColor Yellow
-$actionRequiredRuns = gh run list --repo $Repository --status action_required --json name,status,conclusion,event,headBranch,url,workflowName,createdAt | ConvertFrom-Json
+$actionRequiredRuns = gh run list --repo $Repository --status action_required --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
 
 # Get other pending workflows  
 Write-Host "Checking for other pending workflows..." -ForegroundColor Yellow
-$pendingRuns = gh run list --repo $Repository --status pending --json name,status,conclusion,event,headBranch,url,workflowName,createdAt | ConvertFrom-Json
-$queuedRuns = gh run list --repo $Repository --status queued --json name,status,conclusion,event,headBranch,url,workflowName,createdAt | ConvertFrom-Json
-$requestedRuns = gh run list --repo $Repository --status requested --json name,status,conclusion,event,headBranch,url,workflowName,createdAt | ConvertFrom-Json
-$waitingRuns = gh run list --repo $Repository --status waiting --json name,status,conclusion,event,headBranch,url,workflowName,createdAt | ConvertFrom-Json
+$pendingRuns = gh run list --repo $Repository --status pending --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
+$queuedRuns = gh run list --repo $Repository --status queued --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
+$requestedRuns = gh run list --repo $Repository --status requested --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
+$waitingRuns = gh run list --repo $Repository --status waiting --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
 
 # Combine all pending runs
 $allPendingRuns = @()
@@ -63,6 +88,13 @@ foreach ($run in $uniqueRuns) {
     }
     
     Write-Host "   Event: $($run.event)" -ForegroundColor Gray
+    
+    # Show PR information if available
+    $prInfo = Get-PRInfo $run
+    if ($prInfo) {
+        Write-Host "   Related: $prInfo" -ForegroundColor Cyan
+    }
+    
     if ($run.headBranch) {
         Write-Host "   Branch: $($run.headBranch)" -ForegroundColor Gray
     }
