@@ -4,7 +4,7 @@ public class NonPlatformService : IPlatformService
 {
     public void DoSomething()
     {
-        // Non-platform-specific implementation
+        // Non-platform-specific implementation here
 
         SomethingResult = "Non-platform-specific result";
     }
