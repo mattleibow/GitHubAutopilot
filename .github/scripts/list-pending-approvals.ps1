@@ -1,12 +1,12 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Lists all PRs that have workflows pending manual approval.
+    Lists all PRs with checks that are waiting to run.
 
 .DESCRIPTION
-    This script queries GitHub API to find all open PRs and checks their associated
-    workflow runs to identify which ones are pending manual approval. It provides
-    detailed information about each PR and the specific workflows awaiting approval.
+    This script queries GitHub API to find all open PRs and checks which required
+    status checks or workflows haven't started running yet. It identifies PRs where
+    builds or other checks are waiting to begin, helping identify workflow bottlenecks.
 
 .PARAMETER Repository
     The GitHub repository in the format "owner/repo". If not provided, uses the current repository.
@@ -16,11 +16,11 @@
 
 .EXAMPLE
     ./list-pending-approvals.ps1
-    Lists pending approvals for the current repository
+    Lists PRs with pending checks for the current repository
 
 .EXAMPLE
     ./list-pending-approvals.ps1 -Repository "mattleibow/GitHubAutopilot" -OutputFormat "table"
-    Lists pending approvals in table format for the specified repository
+    Lists PRs with pending checks in table format for the specified repository
 #>
 
 param(
@@ -75,51 +75,101 @@ function Get-CurrentRepository {
     exit 1
 }
 
-# Function to check if workflow run is pending approval
-function Test-WorkflowPendingApproval {
-    param($workflowRun)
+# Function to check if PR has pending/waiting checks
+function Get-PendingChecks {
+    param($repository, $pr)
     
-    # Check for pending approval states
-    $pendingStates = @("waiting", "requested", "pending")
-    
-    # Check the main status
-    if ($workflowRun.status -in $pendingStates) {
-        return $true
-    }
-    
-    # Check if conclusion indicates manual approval needed
-    if ($workflowRun.status -eq "queued" -and $workflowRun.event -eq "pull_request") {
-        return $true
-    }
-    
-    # Check if workflow is waiting for deployment approval
-    if ($workflowRun.status -eq "waiting") {
-        return $true
-    }
-    
-    return $false
-}
-
-# Function to get pending deployments for a workflow run
-function Get-PendingDeployments {
-    param($repository, $workflowRunId)
+    $pendingChecks = @()
+    $commitSha = $pr.head.sha
     
     try {
-        $deployments = gh api "repos/$repository/actions/runs/$workflowRunId/pending_deployments" | ConvertFrom-Json
-        return $deployments
+        # Get check runs for the head commit
+        $checkRuns = gh api "repos/$repository/commits/$commitSha/check-runs?per_page=100" | ConvertFrom-Json
+        
+        # Get commit statuses (legacy status API)
+        $commitStatuses = gh api "repos/$repository/commits/$commitSha/status" | ConvertFrom-Json
+        
+        # Get required status checks from branch protection
+        $requiredChecks = @()
+        try {
+            $branchProtection = gh api "repos/$repository/branches/$($pr.base.ref)/protection" | ConvertFrom-Json
+            if ($branchProtection.required_status_checks -and $branchProtection.required_status_checks.contexts) {
+                $requiredChecks = $branchProtection.required_status_checks.contexts
+            }
+        } catch {
+            # Branch protection might not be set up
+        }
+        
+        # Check for pending/queued/waiting check runs
+        foreach ($checkRun in $checkRuns.check_runs) {
+            if ($checkRun.status -eq "queued" -or $checkRun.status -eq "pending" -or $checkRun.status -eq "waiting" -or $checkRun.status -eq "requested") {
+                $pendingChecks += [PSCustomObject]@{
+                    Name = $checkRun.name
+                    Status = $checkRun.status
+                    Type = "check_run"
+                    HtmlUrl = $checkRun.html_url
+                    Conclusion = $checkRun.conclusion
+                    StartedAt = $checkRun.started_at
+                    CreatedAt = $checkRun.created_at
+                }
+            }
+        }
+        
+        # Check for pending commit statuses
+        foreach ($status in $commitStatuses.statuses) {
+            if ($status.state -eq "pending") {
+                $pendingChecks += [PSCustomObject]@{
+                    Name = $status.context
+                    Status = $status.state
+                    Type = "status"
+                    HtmlUrl = $status.target_url
+                    Description = $status.description
+                    CreatedAt = $status.created_at
+                }
+            }
+        }
+        
+        # Check if any required checks are missing entirely
+        $allCheckNames = @()
+        $allCheckNames += $checkRuns.check_runs | ForEach-Object { $_.name }
+        $allCheckNames += $commitStatuses.statuses | ForEach-Object { $_.context }
+        
+        foreach ($requiredCheck in $requiredChecks) {
+            if ($requiredCheck -notin $allCheckNames) {
+                $pendingChecks += [PSCustomObject]@{
+                    Name = $requiredCheck
+                    Status = "missing"
+                    Type = "required_check"
+                    HtmlUrl = $null
+                    Description = "Required check has not started"
+                    CreatedAt = $null
+                }
+            }
+        }
+        
     } catch {
-        return @()
+        Write-Warning "Failed to get check information for PR #$($pr.number): $($_.Exception.Message)"
     }
+    
+    return $pendingChecks
 }
 
 # Check GitHub CLI authentication
 function Test-GitHubAuthentication {
     # Check if running in GitHub Actions
     if ($env:GITHUB_ACTIONS -eq "true") {
-        if ($env:GH_TOKEN -or $env:GITHUB_TOKEN) {
+        # Try to get token from environment
+        $token = $env:GH_TOKEN
+        if (-not $token) {
+            $token = $env:GITHUB_TOKEN
+        }
+        
+        if ($token -and $token.Length -gt 0) {
+            # Set GH_TOKEN for gh CLI
+            $env:GH_TOKEN = $token
             return $true
         } else {
-            Write-Host "❌ Running in GitHub Actions but GH_TOKEN is not set." -ForegroundColor Red
+            Write-Host "❌ Running in GitHub Actions but no GitHub token found." -ForegroundColor Red
             Write-Host "Please set the GH_TOKEN environment variable in your workflow:" -ForegroundColor Yellow
             Write-Host "env:" -ForegroundColor Gray
             Write-Host "  GH_TOKEN: `${{ github.token }}" -ForegroundColor Gray
@@ -141,7 +191,7 @@ function Test-GitHubAuthentication {
 }
 
 # Main execution starts here
-Write-Host "🔍 Checking for PRs with pending workflow approvals..." -ForegroundColor Cyan
+Write-Host "🔍 Checking for PRs with pending checks..." -ForegroundColor Cyan
 
 # Check if GitHub CLI is authenticated
 if (-not (Test-GitHubAuthentication)) {
@@ -173,100 +223,65 @@ try {
         exit 0
     }
     
-    Write-Host "Found $($prs.Count) open PR(s). Checking workflow statuses..." -ForegroundColor Yellow
+    Write-Host "Found $($prs.Count) open PR(s). Checking for pending checks..." -ForegroundColor Yellow
     
-    $prsWithPendingApprovals = @()
+    $prsWithPendingChecks = @()
     
-    # Check each PR for pending workflow approvals
+    # Check each PR for pending checks
     foreach ($pr in $prs) {
         Write-Host "  Checking PR #$($pr.number): $($pr.title)" -ForegroundColor Gray
         
-        try {
-            # Get workflow runs for this PR
-            $workflowRuns = gh api "repos/$Repository/actions/runs?event=pull_request&branch=$($pr.head.ref)&per_page=100" | ConvertFrom-Json
-            
-            $pendingWorkflows = @()
-            
-            foreach ($run in $workflowRuns.workflow_runs) {
-                # Only check runs that are associated with this PR
-                if ($run.pull_requests -and ($run.pull_requests | Where-Object { $_.number -eq $pr.number })) {
-                    if (Test-WorkflowPendingApproval -workflowRun $run) {
-                        # Get additional details about pending deployments
-                        $pendingDeployments = Get-PendingDeployments -repository $Repository -workflowRunId $run.id
-                        
-                        $pendingWorkflows += [PSCustomObject]@{
-                            WorkflowName = $run.name
-                            WorkflowId = $run.id
-                            Status = $run.status
-                            Conclusion = $run.conclusion
-                            CreatedAt = $run.created_at
-                            HtmlUrl = $run.html_url
-                            PendingDeployments = $pendingDeployments
-                        }
-                    }
-                }
+        $pendingChecks = Get-PendingChecks -repository $Repository -pr $pr
+        
+        if ($pendingChecks.Count -gt 0) {
+            $prsWithPendingChecks += [PSCustomObject]@{
+                PR = $pr
+                PendingChecks = $pendingChecks
             }
-            
-            if ($pendingWorkflows.Count -gt 0) {
-                $prsWithPendingApprovals += [PSCustomObject]@{
-                    PR = $pr
-                    PendingWorkflows = $pendingWorkflows
-                }
-            }
-        } catch {
-            Write-Warning "Failed to get workflow runs for PR #$($pr.number): $($_.Exception.Message)"
         }
     }
     
     # Output results
-    if ($prsWithPendingApprovals.Count -eq 0) {
-        Write-Host "✅ No PRs found with pending workflow approvals." -ForegroundColor Green
+    if ($prsWithPendingChecks.Count -eq 0) {
+        Write-Host "✅ No PRs found with pending checks." -ForegroundColor Green
         exit 0
     }
     
-    Write-Host "`n🚨 Found $($prsWithPendingApprovals.Count) PR(s) with pending workflow approvals:" -ForegroundColor Red
+    Write-Host "`n⏳ Found $($prsWithPendingChecks.Count) PR(s) with pending checks:" -ForegroundColor Yellow
     
     switch ($OutputFormat) {
         "json" {
-            $prsWithPendingApprovals | ConvertTo-Json -Depth 10
+            $prsWithPendingChecks | ConvertTo-Json -Depth 10
         }
         "table" {
-            Write-Host "`nPR | Title | Pending Workflows" -ForegroundColor Yellow
-            Write-Host "---|-------|------------------" -ForegroundColor Yellow
-            foreach ($item in $prsWithPendingApprovals) {
-                $workflowNames = ($item.PendingWorkflows | ForEach-Object { $_.WorkflowName }) -join ", "
-                Write-Host "#$($item.PR.number) | $($item.PR.title) | $workflowNames"
+            Write-Host "`nPR | Title | Pending Checks" -ForegroundColor Yellow
+            Write-Host "---|-------|---------------" -ForegroundColor Yellow
+            foreach ($item in $prsWithPendingChecks) {
+                $checkNames = ($item.PendingChecks | ForEach-Object { "$($_.Name) ($($_.Status))" }) -join ", "
+                Write-Host "#$($item.PR.number) | $($item.PR.title) | $checkNames"
             }
         }
         "detailed" {
-            foreach ($item in $prsWithPendingApprovals) {
+            foreach ($item in $prsWithPendingChecks) {
                 Write-Host "`n📋 PR #$($item.PR.number): $($item.PR.title)" -ForegroundColor Cyan
                 Write-Host "   Author: $($item.PR.user.login)" -ForegroundColor Gray
                 Write-Host "   URL: $($item.PR.html_url)" -ForegroundColor Gray
                 Write-Host "   Branch: $($item.PR.head.ref) → $($item.PR.base.ref)" -ForegroundColor Gray
                 Write-Host "   Created: $($item.PR.created_at)" -ForegroundColor Gray
                 
-                Write-Host "`n   🔄 Pending Workflows:" -ForegroundColor Yellow
-                foreach ($workflow in $item.PendingWorkflows) {
-                    Write-Host "   • $($workflow.WorkflowName)" -ForegroundColor White
-                    Write-Host "     Status: $($workflow.Status)" -ForegroundColor Magenta
-                    if ($workflow.Conclusion) {
-                        Write-Host "     Conclusion: $($workflow.Conclusion)" -ForegroundColor Magenta
+                Write-Host "`n   ⏳ Pending Checks:" -ForegroundColor Yellow
+                foreach ($check in $item.PendingChecks) {
+                    Write-Host "   • $($check.Name)" -ForegroundColor White
+                    Write-Host "     Status: $($check.Status)" -ForegroundColor Gray
+                    Write-Host "     Type: $($check.Type)" -ForegroundColor Gray
+                    if ($check.Description) {
+                        Write-Host "     Description: $($check.Description)" -ForegroundColor Gray
                     }
-                    Write-Host "     Created: $($workflow.CreatedAt)" -ForegroundColor Gray
-                    Write-Host "     URL: $($workflow.HtmlUrl)" -ForegroundColor Gray
-                    
-                    if ($workflow.PendingDeployments -and $workflow.PendingDeployments.Count -gt 0) {
-                        Write-Host "     🚀 Pending Deployments:" -ForegroundColor Yellow
-                        foreach ($deployment in $workflow.PendingDeployments) {
-                            Write-Host "       - Environment: $($deployment.environment.name)" -ForegroundColor Cyan
-                            if ($deployment.reviewers) {
-                                $reviewers = ($deployment.reviewers | ForEach-Object { 
-                                    if ($_.type -eq "User") { $_.reviewer.login } else { $_.reviewer.name } 
-                                }) -join ", "
-                                Write-Host "       - Reviewers: $reviewers" -ForegroundColor Cyan
-                            }
-                        }
+                    if ($check.HtmlUrl) {
+                        Write-Host "     URL: $($check.HtmlUrl)" -ForegroundColor Blue
+                    }
+                    if ($check.CreatedAt) {
+                        Write-Host "     Created: $($check.CreatedAt)" -ForegroundColor Gray
                     }
                     Write-Host ""
                 }
@@ -274,7 +289,7 @@ try {
         }
     }
     
-    Write-Host "`n📊 Summary: $($prsWithPendingApprovals.Count) PR(s) require workflow approval" -ForegroundColor Yellow
+    Write-Host "`n📊 Summary: $($prsWithPendingChecks.Count) PR(s) have pending checks" -ForegroundColor Yellow
     
 } catch {
     Write-Error "Failed to fetch PR and workflow information: $($_.Exception.Message)"
