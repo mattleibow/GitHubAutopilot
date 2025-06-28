@@ -1,12 +1,13 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Lists all PRs with checks that are waiting to run.
+    Lists all PRs with builds or checks that haven't started running yet.
 
 .DESCRIPTION
-    This script queries GitHub API to find all open PRs and checks which required
-    status checks or workflows haven't started running yet. It identifies PRs where
-    builds or other checks are waiting to begin, helping identify workflow bottlenecks.
+    This script queries GitHub API to find all open PRs and identifies which ones
+    have workflows, status checks, or CI builds that are queued, pending, or waiting
+    to start. It helps identify PRs where builds haven't begun, making it easy to
+    spot workflow bottlenecks or PRs that need manual approval to proceed.
 
 .PARAMETER Repository
     The GitHub repository in the format "owner/repo". If not provided, uses the current repository.
@@ -16,11 +17,11 @@
 
 .EXAMPLE
     ./list-pending-approvals.ps1
-    Lists PRs with pending checks for the current repository
+    Lists PRs with builds/checks that haven't started for the current repository
 
 .EXAMPLE
     ./list-pending-approvals.ps1 -Repository "mattleibow/GitHubAutopilot" -OutputFormat "table"
-    Lists PRs with pending checks in table format for the specified repository
+    Lists PRs with pending builds in table format for the specified repository
 #>
 
 param(
@@ -83,21 +84,31 @@ function Get-PendingChecks {
     $commitSha = $pr.head.sha
     
     try {
+        # Get workflow runs for the PR to see if any are waiting
+        $workflowRuns = gh api "repos/$repository/actions/runs?branch=$($pr.head.ref)&per_page=50" 2>$null | ConvertFrom-Json
+        
         # Get check runs for the head commit
-        $checkRuns = gh api "repos/$repository/commits/$commitSha/check-runs?per_page=100" | ConvertFrom-Json
+        $checkRuns = gh api "repos/$repository/commits/$commitSha/check-runs?per_page=100" 2>$null | ConvertFrom-Json
         
-        # Get commit statuses (legacy status API)
-        $commitStatuses = gh api "repos/$repository/commits/$commitSha/status" | ConvertFrom-Json
+        # Get commit statuses (external CI like Azure Pipelines)
+        $commitStatuses = gh api "repos/$repository/commits/$commitSha/status" 2>$null | ConvertFrom-Json
         
-        # Get required status checks from branch protection
-        $requiredChecks = @()
-        try {
-            $branchProtection = gh api "repos/$repository/branches/$($pr.base.ref)/protection" | ConvertFrom-Json
-            if ($branchProtection.required_status_checks -and $branchProtection.required_status_checks.contexts) {
-                $requiredChecks = $branchProtection.required_status_checks.contexts
+        # Check for pending/queued/waiting workflow runs first (most common case)
+        foreach ($run in $workflowRuns.workflow_runs) {
+            # Only consider runs for this specific commit
+            if ($run.head_sha -eq $commitSha) {
+                if ($run.status -eq "queued" -or $run.status -eq "pending" -or $run.status -eq "waiting" -or $run.status -eq "requested") {
+                    $pendingChecks += [PSCustomObject]@{
+                        Name = $run.name
+                        Status = $run.status
+                        Type = "workflow_run"
+                        HtmlUrl = $run.html_url
+                        Event = $run.event
+                        CreatedAt = $run.created_at
+                        UpdatedAt = $run.updated_at
+                    }
+                }
             }
-        } catch {
-            # Branch protection might not be set up
         }
         
         # Check for pending/queued/waiting check runs
@@ -108,20 +119,20 @@ function Get-PendingChecks {
                     Status = $checkRun.status
                     Type = "check_run"
                     HtmlUrl = $checkRun.html_url
-                    Conclusion = $checkRun.conclusion
-                    StartedAt = $checkRun.started_at
+                    App = $checkRun.app.name
                     CreatedAt = $checkRun.created_at
+                    StartedAt = $checkRun.started_at
                 }
             }
         }
         
-        # Check for pending commit statuses
+        # Check for pending commit statuses (external CI systems like Azure Pipelines)
         foreach ($status in $commitStatuses.statuses) {
             if ($status.state -eq "pending") {
                 $pendingChecks += [PSCustomObject]@{
                     Name = $status.context
                     Status = $status.state
-                    Type = "status"
+                    Type = "external_status"
                     HtmlUrl = $status.target_url
                     Description = $status.description
                     CreatedAt = $status.created_at
@@ -129,21 +140,21 @@ function Get-PendingChecks {
             }
         }
         
-        # Check if any required checks are missing entirely
-        $allCheckNames = @()
-        $allCheckNames += $checkRuns.check_runs | ForEach-Object { $_.name }
-        $allCheckNames += $commitStatuses.statuses | ForEach-Object { $_.context }
+        # If no pending checks but also no completed checks, it might mean nothing has started
+        $allChecks = @()
+        $allChecks += $checkRuns.check_runs
+        $allChecks += $commitStatuses.statuses
+        $allChecks += $workflowRuns.workflow_runs | Where-Object { $_.head_sha -eq $commitSha }
         
-        foreach ($requiredCheck in $requiredChecks) {
-            if ($requiredCheck -notin $allCheckNames) {
-                $pendingChecks += [PSCustomObject]@{
-                    Name = $requiredCheck
-                    Status = "missing"
-                    Type = "required_check"
-                    HtmlUrl = $null
-                    Description = "Required check has not started"
-                    CreatedAt = $null
-                }
+        if ($allChecks.Count -eq 0) {
+            # No checks at all - might be waiting for CI to start
+            $pendingChecks += [PSCustomObject]@{
+                Name = "No checks detected"
+                Status = "waiting"
+                Type = "no_checks"
+                HtmlUrl = $pr.html_url
+                Description = "No workflow runs or status checks found - CI may not have started"
+                CreatedAt = $pr.updated_at
             }
         }
         
@@ -191,7 +202,7 @@ function Test-GitHubAuthentication {
 }
 
 # Main execution starts here
-Write-Host "🔍 Checking for PRs with pending checks..." -ForegroundColor Cyan
+Write-Host "🔍 Checking for PRs with builds/checks that haven't started yet..." -ForegroundColor Cyan
 
 # Check if GitHub CLI is authenticated
 if (-not (Test-GitHubAuthentication)) {
@@ -223,7 +234,7 @@ try {
         exit 0
     }
     
-    Write-Host "Found $($prs.Count) open PR(s). Checking for pending checks..." -ForegroundColor Yellow
+    Write-Host "Found $($prs.Count) open PR(s). Checking which builds/checks haven't started..." -ForegroundColor Yellow
     
     $prsWithPendingChecks = @()
     
@@ -243,11 +254,11 @@ try {
     
     # Output results
     if ($prsWithPendingChecks.Count -eq 0) {
-        Write-Host "✅ No PRs found with pending checks." -ForegroundColor Green
+        Write-Host "✅ No PRs found with checks waiting to start." -ForegroundColor Green
         exit 0
     }
     
-    Write-Host "`n⏳ Found $($prsWithPendingChecks.Count) PR(s) with pending checks:" -ForegroundColor Yellow
+    Write-Host "`n⏳ Found $($prsWithPendingChecks.Count) PR(s) with checks that haven't started building:" -ForegroundColor Yellow
     
     switch ($OutputFormat) {
         "json" {
@@ -268,12 +279,28 @@ try {
                 Write-Host "   URL: $($item.PR.html_url)" -ForegroundColor Gray
                 Write-Host "   Branch: $($item.PR.head.ref) → $($item.PR.base.ref)" -ForegroundColor Gray
                 Write-Host "   Created: $($item.PR.created_at)" -ForegroundColor Gray
+                Write-Host "   Last Updated: $($item.PR.updated_at)" -ForegroundColor Gray
                 
-                Write-Host "`n   ⏳ Pending Checks:" -ForegroundColor Yellow
+                Write-Host "`n   ⏳ Pending/Waiting Checks:" -ForegroundColor Yellow
                 foreach ($check in $item.PendingChecks) {
+                    $statusColor = switch ($check.Status) {
+                        "queued" { "Yellow" }
+                        "pending" { "Yellow" }
+                        "waiting" { "Red" }
+                        "requested" { "Cyan" }
+                        default { "White" }
+                    }
+                    
                     Write-Host "   • $($check.Name)" -ForegroundColor White
-                    Write-Host "     Status: $($check.Status)" -ForegroundColor Gray
+                    Write-Host "     Status: $($check.Status)" -ForegroundColor $statusColor
                     Write-Host "     Type: $($check.Type)" -ForegroundColor Gray
+                    
+                    if ($check.App) {
+                        Write-Host "     App: $($check.App)" -ForegroundColor Gray
+                    }
+                    if ($check.Event) {
+                        Write-Host "     Trigger: $($check.Event)" -ForegroundColor Gray
+                    }
                     if ($check.Description) {
                         Write-Host "     Description: $($check.Description)" -ForegroundColor Gray
                     }
@@ -283,13 +310,16 @@ try {
                     if ($check.CreatedAt) {
                         Write-Host "     Created: $($check.CreatedAt)" -ForegroundColor Gray
                     }
+                    if ($check.UpdatedAt) {
+                        Write-Host "     Updated: $($check.UpdatedAt)" -ForegroundColor Gray
+                    }
                     Write-Host ""
                 }
             }
         }
     }
     
-    Write-Host "`n📊 Summary: $($prsWithPendingChecks.Count) PR(s) have pending checks" -ForegroundColor Yellow
+    Write-Host "`n📊 Summary: $($prsWithPendingChecks.Count) PR(s) have checks waiting to start or build" -ForegroundColor Yellow
     
 } catch {
     Write-Error "Failed to fetch PR and workflow information: $($_.Exception.Message)"

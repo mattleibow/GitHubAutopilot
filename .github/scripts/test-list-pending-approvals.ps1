@@ -12,9 +12,20 @@ Write-Host "🧪 Testing list-pending-approvals.ps1 functionality..." -Foregroun
 
 # Mock function to simulate Get-PendingChecks logic
 function Test-GetPendingChecks {
-    param($checkRuns, $commitStatuses, $requiredChecks)
+    param($workflowRuns, $checkRuns, $commitStatuses)
     
     $pendingChecks = @()
+    
+    # Check for pending/queued/waiting workflow runs
+    foreach ($run in $workflowRuns) {
+        if ($run.status -eq "queued" -or $run.status -eq "pending" -or $run.status -eq "waiting" -or $run.status -eq "requested") {
+            $pendingChecks += [PSCustomObject]@{
+                Name = $run.name
+                Status = $run.status
+                Type = "workflow_run"
+            }
+        }
+    }
     
     # Check for pending/queued/waiting check runs
     foreach ($checkRun in $checkRuns) {
@@ -27,29 +38,23 @@ function Test-GetPendingChecks {
         }
     }
     
-    # Check for pending commit statuses
+    # Check for pending commit statuses (external CI)
     foreach ($status in $commitStatuses) {
         if ($status.state -eq "pending") {
             $pendingChecks += [PSCustomObject]@{
                 Name = $status.context
                 Status = $status.state
-                Type = "status"
+                Type = "external_status"
             }
         }
     }
     
-    # Check if any required checks are missing entirely
-    $allCheckNames = @()
-    $allCheckNames += $checkRuns | ForEach-Object { $_.name }
-    $allCheckNames += $commitStatuses | ForEach-Object { $_.context }
-    
-    foreach ($requiredCheck in $requiredChecks) {
-        if ($requiredCheck -notin $allCheckNames) {
-            $pendingChecks += [PSCustomObject]@{
-                Name = $requiredCheck
-                Status = "missing"
-                Type = "required_check"
-            }
+    # If no checks at all, indicate nothing has started
+    if ($workflowRuns.Count -eq 0 -and $checkRuns.Count -eq 0 -and $commitStatuses.Count -eq 0) {
+        $pendingChecks += [PSCustomObject]@{
+            Name = "No checks detected"
+            Status = "waiting"
+            Type = "no_checks"
         }
     }
     
@@ -59,63 +64,63 @@ function Test-GetPendingChecks {
 # Test cases
 $testCases = @(
     @{
-        Name = "Check run with queued status"
-        CheckRuns = @(@{ name = "CI Build"; status = "queued" })
+        Name = "Workflow run with queued status"
+        WorkflowRuns = @(@{ name = "CI Pipeline"; status = "queued" })
+        CheckRuns = @()
         CommitStatuses = @()
-        RequiredChecks = @()
         ExpectedCount = 1
-        ExpectedNames = @("CI Build")
+        ExpectedNames = @("CI Pipeline")
     },
     @{
         Name = "Check run with pending status"
+        WorkflowRuns = @()
         CheckRuns = @(@{ name = "Test Suite"; status = "pending" })
         CommitStatuses = @()
-        RequiredChecks = @()
         ExpectedCount = 1
         ExpectedNames = @("Test Suite")
     },
     @{
-        Name = "Commit status with pending state"
+        Name = "External CI with pending status"
+        WorkflowRuns = @()
         CheckRuns = @()
-        CommitStatuses = @(@{ context = "continuous-integration"; state = "pending" })
-        RequiredChecks = @()
+        CommitStatuses = @(@{ context = "Azure Pipelines"; state = "pending" })
         ExpectedCount = 1
-        ExpectedNames = @("continuous-integration")
+        ExpectedNames = @("Azure Pipelines")
     },
     @{
-        Name = "Missing required check"
-        CheckRuns = @(@{ name = "CI Build"; status = "completed" })
-        CommitStatuses = @()
-        RequiredChecks = @("Required Check", "CI Build")
-        ExpectedCount = 1
-        ExpectedNames = @("Required Check")
-    },
-    @{
-        Name = "Multiple pending checks"
-        CheckRuns = @(
-            @{ name = "CI Build"; status = "queued" },
-            @{ name = "Security Scan"; status = "waiting" }
-        )
-        CommitStatuses = @(@{ context = "code-quality"; state = "pending" })
-        RequiredChecks = @()
+        Name = "Multiple pending checks from different sources"
+        WorkflowRuns = @(@{ name = "GitHub Actions CI"; status = "waiting" })
+        CheckRuns = @(@{ name = "Security Scan"; status = "queued" })
+        CommitStatuses = @(@{ context = "Azure Pipelines"; state = "pending" })
         ExpectedCount = 3
-        ExpectedNames = @("CI Build", "Security Scan", "code-quality")
+        ExpectedNames = @("GitHub Actions CI", "Security Scan", "Azure Pipelines")
     },
     @{
-        Name = "No pending checks"
-        CheckRuns = @(@{ name = "CI Build"; status = "completed" })
-        CommitStatuses = @(@{ context = "continuous-integration"; state = "success" })
-        RequiredChecks = @("CI Build")
-        ExpectedCount = 0
-        ExpectedNames = @()
-    },
-    @{
-        Name = "Check run with completed status (should not be pending)"
-        CheckRuns = @(@{ name = "CI Build"; status = "completed" })
+        Name = "No checks at all (waiting for CI to start)"
+        WorkflowRuns = @()
+        CheckRuns = @()
         CommitStatuses = @()
-        RequiredChecks = @()
+        ExpectedCount = 1
+        ExpectedNames = @("No checks detected")
+    },
+    @{
+        Name = "Completed checks (no pending)"
+        WorkflowRuns = @(@{ name = "CI Pipeline"; status = "completed" })
+        CheckRuns = @(@{ name = "Test Suite"; status = "completed" })
+        CommitStatuses = @(@{ context = "Azure Pipelines"; state = "success" })
         ExpectedCount = 0
         ExpectedNames = @()
+    },
+    @{
+        Name = "Mix of completed and pending checks"
+        WorkflowRuns = @(
+            @{ name = "CI Pipeline"; status = "completed" },
+            @{ name = "Deploy Preview"; status = "waiting" }
+        )
+        CheckRuns = @(@{ name = "Test Suite"; status = "completed" })
+        CommitStatuses = @()
+        ExpectedCount = 1
+        ExpectedNames = @("Deploy Preview")
     }
 )
 
@@ -127,7 +132,7 @@ Write-Host "Running $totalTests test cases..." -ForegroundColor Yellow
 foreach ($testCase in $testCases) {
     Write-Host "  Testing: $($testCase.Name)" -ForegroundColor Gray
     
-    $result = Test-GetPendingChecks -checkRuns $testCase.CheckRuns -commitStatuses $testCase.CommitStatuses -requiredChecks $testCase.RequiredChecks
+    $result = Test-GetPendingChecks -workflowRuns $testCase.WorkflowRuns -checkRuns $testCase.CheckRuns -commitStatuses $testCase.CommitStatuses
     
     # Check count
     if ($result.Count -eq $testCase.ExpectedCount) {
