@@ -8,8 +8,8 @@
     with different parameters and in different environments.
 #>
 
-Write-Host "📚 List Pending Approvals - Usage Examples" -ForegroundColor Cyan
-Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "📚 List Pending Checks - Usage Examples" -ForegroundColor Cyan
+Write-Host "======================================" -ForegroundColor Cyan
 
 Write-Host "`n1. Basic Usage (current repository, detailed output):" -ForegroundColor Yellow
 Write-Host "   ./.github/scripts/list-pending-approvals.ps1" -ForegroundColor Green
@@ -25,7 +25,7 @@ Write-Host "   ./.github/scripts/list-pending-approvals.ps1 -OutputFormat 'json'
 
 Write-Host "`n5. In GitHub Actions workflow:" -ForegroundColor Yellow
 Write-Host @"
-   - name: Check pending approvals
+   - name: Check for PRs with pending checks
      shell: pwsh
      env:
        GH_TOKEN: `${{ secrets.GITHUB_TOKEN }}
@@ -34,21 +34,22 @@ Write-Host @"
 "@ -ForegroundColor Green
 
 Write-Host "`n6. Save output to file:" -ForegroundColor Yellow
-Write-Host "   ./.github/scripts/list-pending-approvals.ps1 -OutputFormat 'json' > pending-approvals.json" -ForegroundColor Green
+Write-Host "   ./.github/scripts/list-pending-approvals.ps1 -OutputFormat 'json' > pending-checks.json" -ForegroundColor Green
 
 Write-Host "`n7. Use with other tools (parse JSON):" -ForegroundColor Yellow
 Write-Host @"
    `$pendingPRs = ./.github/scripts/list-pending-approvals.ps1 -OutputFormat 'json' | ConvertFrom-Json
-   `$pendingPRs | ForEach-Object { Write-Host "PR #`$(`$_.PR.number) needs approval" }
+   `$pendingPRs | ForEach-Object { Write-Host "PR #`$(`$_.PR.number) has pending checks" }
 "@ -ForegroundColor Green
 
 Write-Host "`n📋 Script Features:" -ForegroundColor Cyan
-Write-Host "• Detects workflows with pending manual approvals" -ForegroundColor White
-Write-Host "• Shows deployment environment approvals" -ForegroundColor White
-Write-Host "• Lists required reviewers for deployments" -ForegroundColor White
+Write-Host "• Identifies PRs with checks that haven't started running" -ForegroundColor White
+Write-Host "• Detects pending, queued, and waiting check runs" -ForegroundColor White
+Write-Host "• Finds missing required status checks" -ForegroundColor White
+Write-Host "• Shows commit status checks in pending state" -ForegroundColor White
 Write-Host "• Works in both local and GitHub Actions environments" -ForegroundColor White
 Write-Host "• Supports multiple output formats" -ForegroundColor White
-Write-Host "• Provides detailed error messages and troubleshooting" -ForegroundColor White
+Write-Host "• Helps identify workflow bottlenecks where checks haven't started" -ForegroundColor White
 
 Write-Host "`n🔧 Prerequisites:" -ForegroundColor Cyan
 Write-Host "• GitHub CLI (gh) installed and authenticated" -ForegroundColor White

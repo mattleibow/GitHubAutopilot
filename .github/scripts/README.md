@@ -6,7 +6,7 @@ This directory contains PowerShell scripts for GitHub automation and monitoring.
 
 ### list-pending-approvals.ps1
 
-Lists all pull requests that have workflows pending manual approval.
+Lists all pull requests with checks that are waiting to run.
 
 #### Prerequisites
 - PowerShell 5.1 or later (or PowerShell Core 6+)
@@ -15,16 +15,16 @@ Lists all pull requests that have workflows pending manual approval.
 #### Usage
 
 ```powershell
-# List pending approvals for current repository (detailed format)
+# List PRs with pending checks for current repository (detailed format)
 ./list-pending-approvals.ps1
 
-# List pending approvals for specific repository
+# List PRs with pending checks for specific repository
 ./list-pending-approvals.ps1 -Repository "owner/repo"
 
-# List pending approvals in table format
+# List PRs with pending checks in table format
 ./list-pending-approvals.ps1 -OutputFormat "table"
 
-# List pending approvals in JSON format
+# List PRs with pending checks in JSON format
 ./list-pending-approvals.ps1 -OutputFormat "json"
 ```
 
@@ -35,11 +35,12 @@ Lists all pull requests that have workflows pending manual approval.
 
 #### Output
 
-The script identifies PRs with workflows that are:
-- Waiting for manual approval
-- In "pending", "requested", or "waiting" status
-- Queued for pull request events (may require approval)
-- Have pending deployment approvals
+The script identifies PRs with checks that are:
+- In "queued", "pending", "waiting", or "requested" status (haven't started running)
+- Required by branch protection but missing entirely
+- Status checks showing "pending" state
+
+This helps identify workflow bottlenecks where builds or other checks haven't started yet.
 
 #### Examples
 
@@ -51,22 +52,25 @@ The script identifies PRs with workflows that are:
    Branch: feature-branch → main
    Created: 2025-01-01T10:00:00Z
 
-   🔄 Pending Workflows:
-   • Deploy to Production
-     Status: waiting
-     Created: 2025-01-01T10:05:00Z
+   ⏳ Pending Checks:
+   • CI Build
+     Status: queued
+     Type: check_run
      URL: https://github.com/owner/repo/actions/runs/456789
-     🚀 Pending Deployments:
-       - Environment: production
-       - Reviewers: admin-team
+     Created: 2025-01-01T10:05:00Z
+   
+   • Code Quality
+     Status: pending
+     Type: status
+     Description: Waiting for checks to complete
 ```
 
 **Table Output:**
 ```
-PR | Title | Pending Workflows
----|-------|------------------
-#123 | Add new feature | Deploy to Production
-#124 | Fix bug | Deploy to Staging, Deploy to Production
+PR | Title | Pending Checks
+---|-------|---------------
+#123 | Add new feature | CI Build (queued), Code Quality (pending)
+#124 | Fix bug | Unit Tests (missing), Deploy (queued)
 ```
 
 ### test-list-pending-approvals.ps1
