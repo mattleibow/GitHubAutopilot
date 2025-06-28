@@ -141,6 +141,7 @@ $errorMessagesText
 1. Understanding the root cause of each failure
 2. Providing specific code changes to resolve the issues  
 3. Ensuring the fixes maintain code quality and don't break existing functionality
+4. Avoiding unnecessary changes or comments unrelated to the failures
 
 ---
 *This comment was automatically generated when the build failed.*
