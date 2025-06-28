@@ -1,4 +1,6 @@
-﻿namespace MyMauiLibrary;
+﻿using Windows.System.Profile;
+
+namespace MyMauiLibrary;
 
 public class PlatformService : IPlatformService
 {

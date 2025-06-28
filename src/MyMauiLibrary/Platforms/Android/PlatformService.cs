@@ -1,4 +1,6 @@
-﻿namespace MyMauiLibrary;
+﻿using Android.OS;
+
+namespace MyMauiLibrary;
 
 public class PlatformService : IPlatformService
 {
