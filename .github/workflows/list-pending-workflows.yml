@@ -1,0 +1,51 @@
+name: List Pending Workflows
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository to check (owner/repo format). Leave empty to use current repository.'
+        required: false
+        default: ''
+      per_page:
+        description: 'Number of workflow runs to fetch per page (1-100)'
+        required: false
+        default: '50'
+      max_pages:
+        description: 'Maximum number of pages to fetch (1-20)'
+        required: false
+        default: '5'
+
+jobs:
+  list-pending-workflows:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup PowerShell
+      shell: pwsh
+      run: |
+        Write-Host "PowerShell version: $($PSVersionTable.PSVersion)"
+        
+    - name: List pending workflows
+      shell: pwsh
+      run: |
+        $params = @{}
+        
+        if ('${{ github.event.inputs.repository }}') {
+          $params.Repository = '${{ github.event.inputs.repository }}'
+        }
+        
+        if ('${{ github.event.inputs.per_page }}') {
+          $params.PerPage = [int]'${{ github.event.inputs.per_page }}'
+        }
+        
+        if ('${{ github.event.inputs.max_pages }}') {
+          $params.MaxPages = [int]'${{ github.event.inputs.max_pages }}'
+        }
+        
+        ./.github/scripts/list-pending-workflows.ps1 @params
+      env:
+        GH_TOKEN: ${{ github.token }}

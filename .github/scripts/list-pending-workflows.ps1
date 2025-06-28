@@ -15,9 +15,6 @@
 .PARAMETER Repository
     The GitHub repository in the format "owner/repo". If not provided, uses the current repository.
 
-.PARAMETER OutputFormat
-    The output format: "table", "json", or "detailed". Default is "detailed".
-
 .PARAMETER PerPage
     Number of workflow runs to fetch per page. Default is 50, max is 100.
 
@@ -29,17 +26,13 @@
     Lists all workflow runs with pending ones highlighted
 
 .EXAMPLE
-    ./list-pending-workflows.ps1 -Repository "mattleibow/GitHubAutopilot" -OutputFormat "table"
-    Lists workflow runs in table format for the specified repository
+    ./list-pending-workflows.ps1 -Repository "mattleibow/GitHubAutopilot"
+    Lists workflow runs for the specified repository
 #>
 
 param(
     [Parameter(Mandatory = $false)]
     [string]$Repository = "",
-    
-    [Parameter(Mandatory = $false)]
-    [ValidateSet("table", "json", "detailed")]
-    [string]$OutputFormat = "detailed",
     
     [Parameter(Mandatory = $false)]
     [ValidateRange(1, 100)]
@@ -127,6 +120,22 @@ function Test-GitHubAuthentication {
     } catch {
         return $false
     }
+}
+
+# Function to get workflow file name
+function Get-WorkflowFileName {
+    param($workflowId)
+    
+    try {
+        $workflow = gh api "repos/$Repository/actions/workflows/$workflowId" | ConvertFrom-Json
+        if ($workflow -and $workflow.path) {
+            return [System.IO.Path]::GetFileName($workflow.path)
+        }
+    } catch {
+        # If we can't get the workflow file name, return empty
+    }
+    
+    return ""
 }
 
 # Function to get workflow runs
@@ -251,108 +260,72 @@ try {
     $categories = Get-WorkflowCategories -workflowRuns $workflowRuns
     
     # Output results
-    switch ($OutputFormat) {
-        "json" {
-            $result = @{
-                Repository = $Repository
-                TotalRuns = $workflowRuns.Count
-                Pending = $categories.Pending
-                Running = $categories.Running
-                Completed = $categories.Completed
+    Write-Host "`n📊 Workflow Runs Summary:" -ForegroundColor Cyan
+    Write-Host "Pending: $($categories.Pending.Count)" -ForegroundColor Red
+    Write-Host "Running: $($categories.Running.Count)" -ForegroundColor Yellow
+    Write-Host "Completed: $($categories.Completed.Count)" -ForegroundColor Green
+    Write-Host "Total: $($workflowRuns.Count)" -ForegroundColor White
+    
+    if ($categories.Pending.Count -gt 0) {
+        Write-Host "`n⏳ PENDING WORKFLOW RUNS:" -ForegroundColor Red
+        foreach ($run in $categories.Pending) {
+            $workflowFile = Get-WorkflowFileName -workflowId $run.workflow_id
+            Write-Host "`n🔴 Workflow: $($run.name)" -ForegroundColor Red
+            Write-Host "   ID: $($run.id)" -ForegroundColor Gray
+            if ($workflowFile) {
+                Write-Host "   File: $workflowFile" -ForegroundColor Gray
             }
-            $result | ConvertTo-Json -Depth 10
+            if ($run.conclusion -eq "action_required") {
+                Write-Host "   Status: action_required (awaiting approval)" -ForegroundColor Red
+            } else {
+                Write-Host "   Status: $($run.status)" -ForegroundColor Red
+            }
+            Write-Host "   Event: $($run.event)" -ForegroundColor Gray
+            if ($run.head_branch) {
+                Write-Host "   Branch: $($run.head_branch)" -ForegroundColor Gray
+            }
+            if ($run.triggering_actor) {
+                Write-Host "   Triggered by: $($run.triggering_actor.login)" -ForegroundColor Gray
+            }
+            Write-Host "   Created: $($run.created_at)" -ForegroundColor Gray
+            if ($run.run_started_at) {
+                Write-Host "   Started: $($run.run_started_at)" -ForegroundColor Gray
+            }
+            Write-Host "   URL: $($run.html_url)" -ForegroundColor Blue
         }
-        "table" {
-            Write-Host "`n📊 Workflow Runs Summary:" -ForegroundColor Cyan
-            Write-Host "Pending: $($categories.Pending.Count)" -ForegroundColor Red
-            Write-Host "Running: $($categories.Running.Count)" -ForegroundColor Yellow
-            Write-Host "Completed: $($categories.Completed.Count)" -ForegroundColor Green
-            Write-Host "Total: $($workflowRuns.Count)" -ForegroundColor White
-            
-            if ($categories.Pending.Count -gt 0) {
-                Write-Host "`n⏳ PENDING WORKFLOW RUNS:" -ForegroundColor Red
-                Write-Host "ID | Workflow | Status | Event | Branch | Created" -ForegroundColor Yellow
-                Write-Host "---|----------|--------|-------|--------|--------" -ForegroundColor Yellow
-                foreach ($run in $categories.Pending) {
-                    $branch = if ($run.head_branch) { $run.head_branch } else { "N/A" }
-                    $created = ([DateTime]::Parse($run.created_at)).ToString("yyyy-MM-dd HH:mm")
-                    $statusText = if ($run.conclusion -eq "action_required") { "action_required" } else { $run.status }
-                    Write-Host "$($run.id) | $($run.name) | $statusText | $($run.event) | $branch | $created" -ForegroundColor Red
-                }
+    }
+    
+    if ($categories.Running.Count -gt 0) {
+        Write-Host "`n🏃 RUNNING WORKFLOW RUNS:" -ForegroundColor Yellow
+        foreach ($run in $categories.Running) {
+            $duration = Format-Duration -startTime $run.run_started_at
+            $workflowFile = Get-WorkflowFileName -workflowId $run.workflow_id
+            Write-Host "`n🟡 Workflow: $($run.name)" -ForegroundColor Yellow
+            Write-Host "   ID: $($run.id)" -ForegroundColor Gray
+            if ($workflowFile) {
+                Write-Host "   File: $workflowFile" -ForegroundColor Gray
             }
-            
-            if ($categories.Running.Count -gt 0) {
-                Write-Host "`n🏃 RUNNING WORKFLOW RUNS:" -ForegroundColor Yellow
-                Write-Host "ID | Workflow | Status | Event | Branch | Duration" -ForegroundColor Yellow
-                Write-Host "---|----------|--------|-------|--------|--------" -ForegroundColor Yellow
-                foreach ($run in $categories.Running) {
-                    $branch = if ($run.head_branch) { $run.head_branch } else { "N/A" }
-                    $duration = Format-Duration -startTime $run.run_started_at
-                    Write-Host "$($run.id) | $($run.name) | $($run.status) | $($run.event) | $branch | $duration" -ForegroundColor Yellow
-                }
+            Write-Host "   Status: $($run.status)" -ForegroundColor Yellow
+            Write-Host "   Event: $($run.event)" -ForegroundColor Gray
+            if ($run.head_branch) {
+                Write-Host "   Branch: $($run.head_branch)" -ForegroundColor Gray
             }
+            if ($run.triggering_actor) {
+                Write-Host "   Triggered by: $($run.triggering_actor.login)" -ForegroundColor Gray
+            }
+            Write-Host "   Started: $($run.run_started_at)" -ForegroundColor Gray
+            Write-Host "   Duration: $duration" -ForegroundColor Gray
+            Write-Host "   URL: $($run.html_url)" -ForegroundColor Blue
         }
-        "detailed" {
-            Write-Host "`n📊 Workflow Runs Summary:" -ForegroundColor Cyan
-            Write-Host "Pending: $($categories.Pending.Count)" -ForegroundColor Red
-            Write-Host "Running: $($categories.Running.Count)" -ForegroundColor Yellow
-            Write-Host "Completed: $($categories.Completed.Count)" -ForegroundColor Green
-            Write-Host "Total: $($workflowRuns.Count)" -ForegroundColor White
-            
-            if ($categories.Pending.Count -gt 0) {
-                Write-Host "`n⏳ PENDING WORKFLOW RUNS:" -ForegroundColor Red
-                foreach ($run in $categories.Pending) {
-                    Write-Host "`n🔴 Workflow: $($run.name)" -ForegroundColor Red
-                    Write-Host "   ID: $($run.id)" -ForegroundColor Gray
-                    if ($run.conclusion -eq "action_required") {
-                        Write-Host "   Status: action_required (awaiting approval)" -ForegroundColor Red
-                    } else {
-                        Write-Host "   Status: $($run.status)" -ForegroundColor Red
-                    }
-                    Write-Host "   Event: $($run.event)" -ForegroundColor Gray
-                    if ($run.head_branch) {
-                        Write-Host "   Branch: $($run.head_branch)" -ForegroundColor Gray
-                    }
-                    if ($run.triggering_actor) {
-                        Write-Host "   Triggered by: $($run.triggering_actor.login)" -ForegroundColor Gray
-                    }
-                    Write-Host "   Created: $($run.created_at)" -ForegroundColor Gray
-                    if ($run.run_started_at) {
-                        Write-Host "   Started: $($run.run_started_at)" -ForegroundColor Gray
-                    }
-                    Write-Host "   URL: $($run.html_url)" -ForegroundColor Blue
-                }
-            }
-            
-            if ($categories.Running.Count -gt 0) {
-                Write-Host "`n🏃 RUNNING WORKFLOW RUNS:" -ForegroundColor Yellow
-                foreach ($run in $categories.Running) {
-                    $duration = Format-Duration -startTime $run.run_started_at
-                    Write-Host "`n🟡 Workflow: $($run.name)" -ForegroundColor Yellow
-                    Write-Host "   ID: $($run.id)" -ForegroundColor Gray
-                    Write-Host "   Status: $($run.status)" -ForegroundColor Yellow
-                    Write-Host "   Event: $($run.event)" -ForegroundColor Gray
-                    if ($run.head_branch) {
-                        Write-Host "   Branch: $($run.head_branch)" -ForegroundColor Gray
-                    }
-                    if ($run.triggering_actor) {
-                        Write-Host "   Triggered by: $($run.triggering_actor.login)" -ForegroundColor Gray
-                    }
-                    Write-Host "   Started: $($run.run_started_at)" -ForegroundColor Gray
-                    Write-Host "   Duration: $duration" -ForegroundColor Gray
-                    Write-Host "   URL: $($run.html_url)" -ForegroundColor Blue
-                }
-            }
-            
-            if ($categories.Completed.Count -gt 0 -and ($categories.Pending.Count -gt 0 -or $categories.Running.Count -gt 0)) {
-                Write-Host "`n✅ Recent completed workflow runs: $($categories.Completed.Count)" -ForegroundColor Green
-                $recentCompleted = $categories.Completed | Sort-Object { [DateTime]::Parse($_.updated_at) } -Descending | Select-Object -First 5
-                foreach ($run in $recentCompleted) {
-                    $duration = Format-Duration -startTime $run.run_started_at -endTime $run.updated_at
-                    $statusIcon = if ($run.conclusion -eq "success") { "✅" } elseif ($run.conclusion -eq "failure") { "❌" } else { "⚠️" }
-                    Write-Host "   $statusIcon $($run.name) ($($run.conclusion)) - $duration ago" -ForegroundColor Green
-                }
-            }
+    }
+    
+    if ($categories.Completed.Count -gt 0 -and ($categories.Pending.Count -gt 0 -or $categories.Running.Count -gt 0)) {
+        Write-Host "`n✅ Recent completed workflow runs: $($categories.Completed.Count)" -ForegroundColor Green
+        $recentCompleted = $categories.Completed | Sort-Object { [DateTime]::Parse($_.updated_at) } -Descending | Select-Object -First 5
+        foreach ($run in $recentCompleted) {
+            $duration = Format-Duration -startTime $run.run_started_at -endTime $run.updated_at
+            $statusIcon = if ($run.conclusion -eq "success") { "✅" } elseif ($run.conclusion -eq "failure") { "❌" } else { "⚠️" }
+            Write-Host "   $statusIcon $($run.name) ($($run.conclusion)) - $duration ago" -ForegroundColor Green
         }
     }
     
