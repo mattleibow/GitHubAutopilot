@@ -29,8 +29,17 @@ param(
     
     [Parameter(Mandatory = $false)]
     [ValidateSet("table", "json", "detailed")]
-    [string]$OutputFormat = "detailed"
+    [string]$OutputFormat = "detailed",
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$Help
 )
+
+# Show help if requested
+if ($Help) {
+    Get-Help $PSCommandPath -Detailed
+    exit 0
+}
 
 # Function to get repository info if not provided
 function Get-CurrentRepository {
