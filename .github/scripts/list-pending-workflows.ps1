@@ -109,8 +109,8 @@ $allPendingRuns += $queuedRuns
 $allPendingRuns += $requestedRuns
 $allPendingRuns += $waitingRuns
 
-# Remove duplicates by run ID
-$uniqueRuns = $allPendingRuns | Sort-Object name -Unique
+# Remove duplicates by run number (each workflow run has a unique number)
+$uniqueRuns = $allPendingRuns | Sort-Object number -Unique
 
 if ($uniqueRuns.Count -eq 0) {
     Write-Host "`n✅ No workflows needing approval or pending." -ForegroundColor Green
