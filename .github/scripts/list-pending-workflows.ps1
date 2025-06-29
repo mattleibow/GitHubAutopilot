@@ -25,17 +25,41 @@ function Get-PRInfo {
     
     $prNumber = $null
     
-    # For pull_request events, the number field contains the PR number
-    if ($run.event -eq "pull_request" -and $run.number) {
-        $prNumber = $run.number
+    # For pull_request events, try to find PR by matching head branch
+    if ($run.event -eq "pull_request" -and $run.headBranch) {
+        try {
+            $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid,headRefName | ConvertFrom-Json
+            if ($prs -and $prs.Count -gt 0) {
+                # If we have a headSha, match by SHA for accuracy
+                if ($run.headSha) {
+                    $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
+                    if ($matchingPR) {
+                        $prNumber = $matchingPR.number
+                    }
+                } else {
+                    # Otherwise, use the first PR for this branch
+                    $prNumber = $prs[0].number
+                }
+            }
+        } catch {
+            # Ignore errors when trying to find PR
+        }
     } else {
-        # For other events, try to find PR by matching head SHA
-        if ($run.headSha) {
+        # For other events, try to find PR by matching head SHA or branch
+        if ($run.headSha -or $run.headBranch) {
             try {
-                $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid | ConvertFrom-Json
-                $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
-                if ($matchingPR) {
-                    $prNumber = $matchingPR.number
+                if ($run.headBranch) {
+                    $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid | ConvertFrom-Json
+                    if ($prs -and $prs.Count -gt 0) {
+                        if ($run.headSha) {
+                            $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
+                            if ($matchingPR) {
+                                $prNumber = $matchingPR.number
+                            }
+                        } else {
+                            $prNumber = $prs[0].number
+                        }
+                    }
                 }
             } catch {
                 # Ignore errors when trying to find PR
