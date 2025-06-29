@@ -23,21 +23,40 @@ param(
 function Get-PRInfo {
     param($run)
     
+    $prNumber = $null
+    
     # For pull_request events, the number field contains the PR number
     if ($run.event -eq "pull_request" -and $run.number) {
-        return "PR #$($run.number)"
+        $prNumber = $run.number
+    } else {
+        # For other events, try to find PR by matching head SHA
+        if ($run.headSha) {
+            try {
+                $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid | ConvertFrom-Json
+                $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
+                if ($matchingPR) {
+                    $prNumber = $matchingPR.number
+                }
+            } catch {
+                # Ignore errors when trying to find PR
+            }
+        }
     }
     
-    # For other events, try to find PR by matching head SHA
-    if ($run.headSha) {
+    # If we found a PR number, get additional details including author
+    if ($prNumber) {
         try {
-            $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid | ConvertFrom-Json
-            $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
-            if ($matchingPR) {
-                return "PR #$($matchingPR.number)"
+            $prDetails = gh pr view $prNumber --repo $Repository --json number,author | ConvertFrom-Json
+            return @{
+                Number = $prDetails.number
+                Author = $prDetails.author.login
             }
         } catch {
-            # Ignore errors when trying to find PR
+            # If we can't get details, just return the number
+            return @{
+                Number = $prNumber
+                Author = $null
+            }
         }
     }
     
@@ -92,7 +111,11 @@ foreach ($run in $uniqueRuns) {
     # Show PR information if available
     $prInfo = Get-PRInfo $run
     if ($prInfo) {
-        Write-Host "   Related: $prInfo" -ForegroundColor Cyan
+        if ($prInfo.Author) {
+            Write-Host "   Related: PR #$($prInfo.Number) (by @$($prInfo.Author))" -ForegroundColor Cyan
+        } else {
+            Write-Host "   Related: PR #$($prInfo.Number)" -ForegroundColor Cyan
+        }
     }
     
     if ($run.headBranch) {
