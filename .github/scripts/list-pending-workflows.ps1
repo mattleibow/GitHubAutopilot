@@ -4,8 +4,8 @@
     Lists workflow runs that need approval.
 
 .DESCRIPTION
-    This script uses gh CLI to find workflow runs that require manual approval
-    (action_required status) and other pending workflows.
+    This script uses GitHub API to find workflow runs that require manual approval
+    (action_required status only).
 
 .PARAMETER Repository
     The GitHub repository in the format "owner/repo". Required.
@@ -19,132 +19,61 @@ param(
     [string]$Repository
 )
 
-# Function to get PR information for a workflow run
-function Get-PRInfo {
-    param($run)
-    
-    $prNumber = $null
-    
-    # For pull_request events, try to find PR by matching head branch
-    if ($run.event -eq "pull_request" -and $run.headBranch) {
-        try {
-            $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid,headRefName | ConvertFrom-Json
-            if ($prs -and $prs.Count -gt 0) {
-                # If we have a headSha, match by SHA for accuracy
-                if ($run.headSha) {
-                    $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
-                    if ($matchingPR) {
-                        $prNumber = $matchingPR.number
-                    }
-                } else {
-                    # Otherwise, use the first PR for this branch
-                    $prNumber = $prs[0].number
-                }
-            }
-        } catch {
-            # Ignore errors when trying to find PR
-        }
-    } else {
-        # For other events, try to find PR by matching head SHA or branch
-        if ($run.headSha -or $run.headBranch) {
-            try {
-                if ($run.headBranch) {
-                    $prs = gh pr list --repo $Repository --head $run.headBranch --json number,headRefOid | ConvertFrom-Json
-                    if ($prs -and $prs.Count -gt 0) {
-                        if ($run.headSha) {
-                            $matchingPR = $prs | Where-Object { $_.headRefOid -eq $run.headSha }
-                            if ($matchingPR) {
-                                $prNumber = $matchingPR.number
-                            }
-                        } else {
-                            $prNumber = $prs[0].number
-                        }
-                    }
-                }
-            } catch {
-                # Ignore errors when trying to find PR
-            }
-        }
-    }
-    
-    # If we found a PR number, get additional details including author
-    if ($prNumber) {
-        try {
-            $prDetails = gh pr view $prNumber --repo $Repository --json number,author | ConvertFrom-Json
-            return @{
-                Number = $prDetails.number
-                Author = $prDetails.author.login
-            }
-        } catch {
-            # If we can't get details, just return the number
-            return @{
-                Number = $prNumber
-                Author = $null
-            }
-        }
-    }
-    
-    return $null
-}
-
 Write-Host "🔄 Checking for workflows needing approval..." -ForegroundColor Cyan
 Write-Host "Repository: $Repository" -ForegroundColor Green
 
-# Get workflows that need action (awaiting approval)
-Write-Host "`nChecking for workflows awaiting approval..." -ForegroundColor Yellow
-$actionRequiredRuns = gh run list --repo $Repository --status action_required --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
+# Get workflow runs that need action (awaiting approval) using GitHub API
+Write-Host "`nFetching workflows awaiting approval..." -ForegroundColor Yellow
+$workflowRuns = gh api "repos/$Repository/actions/runs?status=action_required&per_page=100" --jq '.workflow_runs[] | {
+    id: .id,
+    name: .name,
+    status: .status,
+    conclusion: .conclusion,
+    event: .event,
+    head_branch: .head_branch,
+    head_sha: .head_sha,
+    url: .html_url,
+    workflow_name: .name,
+    created_at: .created_at,
+    run_number: .run_number,
+    pull_requests: .pull_requests
+}' | ConvertFrom-Json
 
-# Get other pending workflows  
-Write-Host "Checking for other pending workflows..." -ForegroundColor Yellow
-$pendingRuns = gh run list --repo $Repository --status pending --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
-$queuedRuns = gh run list --repo $Repository --status queued --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
-$requestedRuns = gh run list --repo $Repository --status requested --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
-$waitingRuns = gh run list --repo $Repository --status waiting --json name,status,conclusion,event,headBranch,headSha,url,workflowName,createdAt,number | ConvertFrom-Json
-
-# Combine all pending runs
-$allPendingRuns = @()
-$allPendingRuns += $actionRequiredRuns
-$allPendingRuns += $pendingRuns  
-$allPendingRuns += $queuedRuns
-$allPendingRuns += $requestedRuns
-$allPendingRuns += $waitingRuns
-
-# Remove duplicates by run number (each workflow run has a unique number)
-$uniqueRuns = $allPendingRuns | Sort-Object number -Unique
-
-if ($uniqueRuns.Count -eq 0) {
-    Write-Host "`n✅ No workflows needing approval or pending." -ForegroundColor Green
+if (-not $workflowRuns -or $workflowRuns.Count -eq 0) {
+    Write-Host "`n✅ No workflows needing approval." -ForegroundColor Green
     exit 0
 }
 
-# Display results
-Write-Host "`n🚨 Found $($uniqueRuns.Count) workflow run(s) needing attention:" -ForegroundColor Red
+# Ensure workflowRuns is always an array
+if ($workflowRuns -isnot [array]) {
+    $workflowRuns = @($workflowRuns)
+}
 
-foreach ($run in $uniqueRuns) {
-    Write-Host "`n🔴 $($run.workflowName)" -ForegroundColor Red
-    Write-Host "   Name: $($run.name)" -ForegroundColor Gray
-    
-    if ($run.status -eq "completed" -and $run.conclusion -eq "action_required") {
-        Write-Host "   Status: awaiting approval" -ForegroundColor Red
-    } else {
-        Write-Host "   Status: $($run.status)" -ForegroundColor Yellow
-    }
-    
+# Display results
+Write-Host "`n🚨 Found $($workflowRuns.Count) workflow run(s) needing approval:" -ForegroundColor Red
+
+foreach ($run in $workflowRuns) {
+    Write-Host "`n🔴 $($run.workflow_name)" -ForegroundColor Red
+    Write-Host "   Status: awaiting approval" -ForegroundColor Red
     Write-Host "   Event: $($run.event)" -ForegroundColor Gray
     
-    # Show PR information if available
-    $prInfo = Get-PRInfo $run
-    if ($prInfo) {
-        if ($prInfo.Author) {
-            Write-Host "   Related: PR #$($prInfo.Number) (by @$($prInfo.Author))" -ForegroundColor Cyan
-        } else {
-            Write-Host "   Related: PR #$($prInfo.Number)" -ForegroundColor Cyan
+    # Show PR information if available from the workflow run
+    if ($run.pull_requests -and $run.pull_requests.Count -gt 0) {
+        $prNumber = $run.pull_requests[0].number
+        # Get PR details using API
+        $prDetails = gh api "repos/$Repository/pulls/$prNumber" --jq '{number: .number, author: .user.login}' | ConvertFrom-Json
+        Write-Host "   Related: PR #$($prDetails.number) (by @$($prDetails.author))" -ForegroundColor Cyan
+    } elseif ($run.head_branch -and $run.head_branch -ne "main" -and $run.head_branch -ne "master") {
+        # Try to find PR by branch name using API
+        $prSearch = gh api "repos/$Repository/pulls?head=$($Repository.Split('/')[0]):$($run.head_branch)&state=open" --jq '.[0] | select(. != null) | {number: .number, author: .user.login}' | ConvertFrom-Json
+        if ($prSearch) {
+            Write-Host "   Related: PR #$($prSearch.number) (by @$($prSearch.author))" -ForegroundColor Cyan
         }
     }
     
-    if ($run.headBranch) {
-        Write-Host "   Branch: $($run.headBranch)" -ForegroundColor Gray
+    if ($run.head_branch) {
+        Write-Host "   Branch: $($run.head_branch)" -ForegroundColor Gray
     }
-    Write-Host "   Created: $($run.createdAt)" -ForegroundColor Gray
+    Write-Host "   Created: $($run.created_at)" -ForegroundColor Gray
     Write-Host "   URL: $($run.url)" -ForegroundColor Blue
 }
