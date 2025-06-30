@@ -8,12 +8,12 @@ parameters:
   - name: platforms
     type: object
     default:
-      - name: Windows
-        image: windows-latest
-      - name: Ubuntu
+      - name: Linux
         image: ubuntu-latest
       - name: macOS
         image: macOS-15
+      - name: Windows
+        image: windows-latest
 
 variables:
   buildConfiguration: 'Debug'
@@ -23,7 +23,7 @@ stages:
   - ${{ each platform in parameters.platforms }}:
     - stage: BuildAndTest_${{ platform.name }}
       displayName: '${{ platform.name }}'
-      dependsOn: []
+      #dependsOn: []
       jobs:
         - job: Build_${{ platform.name }}
           displayName: 'Build on ${{ platform.name }}'
@@ -40,7 +40,7 @@ stages:
 
         - job: Test_${{ platform.name }}
           displayName: 'Tests on ${{ platform.name }}'
-          # dependsOn: Build_${{ platform.name }}
+          #dependsOn: Build_${{ platform.name }}
           pool:
             vmImage: ${{ platform.image }}
           steps:
