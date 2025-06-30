@@ -1,0 +1,23 @@
+name: "Copilot Approve Post PR Failure Comments Action"
+
+inputs:
+  token:
+    description: 'GitHub token to use for authentication'
+    required: false
+    default: ${{ github.token }}
+  workflow:
+    description: 'The name of the workflow to approve'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    
+    - name: Approve pending comment workflows
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        ${{ github.action_path }}/action.ps1 `
+          -Repository "${{ github.repository }}" `
+          -WorkflowName "${{ inputs.workflow }}"

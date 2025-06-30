@@ -8,16 +8,10 @@ on:
 jobs:
   approve-pending-workflows:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
-    
-    - name: Checkout repository
-      uses: actions/checkout@v4
-        
-    - name: Approve pending comment workflows
-      shell: pwsh
-      env:
-        GH_TOKEN: ${{ secrets.BUILD_STATUS_COMMENT || secrets.GITHUB_TOKEN }}
-      run: |
-        ./.github/scripts/copilot-approve-pending-workflows.ps1 `
-          -Repository "${{ github.repository }}" `
-          -WorkflowName "Copilot Post PR Failure Comments"
+      - name: Approve pending comment workflows
+        uses: ./.github/actions/copilot-approve-pending-workflows
+        with:
+          workflow: "Copilot Post PR Failure Comments"

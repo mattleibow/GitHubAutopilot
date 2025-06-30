@@ -1,0 +1,31 @@
+name: "Copilot Post PR Failure Comments Action"
+
+inputs:
+  token:
+    description: 'GitHub token to use for authentication'
+    required: false
+    default: ${{ github.token }}
+  max-comments:
+    description: 'The maximum number of comments to post'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    
+    - name: Post any failure comments
+      shell: pwsh
+      # Only run if the check suite failed and there are associated pull requests
+      if: >
+        github.event.check_suite != null &&
+        github.event.check_suite.conclusion == 'failure' &&
+        startsWith(github.event.check_suite.head_branch, 'copilot/') &&
+        github.event.check_suite.pull_requests[0] != null
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        ${{ github.action_path }}/action.ps1 `
+          -Repository "${{ github.repository }}" `
+          -CheckSuiteId "${{ github.event.check_suite.id }}" `
+          -PullRequestNumber "${{ github.event.check_suite.pull_requests[0].number }}" `
+          -MaxCommentCount ${{ inputs.max-comments }}

@@ -7,27 +7,13 @@ on:
 jobs:
   post-failure-comment:
     runs-on: ubuntu-latest
-    # Only run if the check suite failed and there are associated pull requests
-    if: >
-      github.event.check_suite.conclusion == 'failure' &&
-      startsWith(github.event.check_suite.head_branch, 'copilot/') &&
-      github.event.check_suite.pull_requests[0] != null
-    permissions:
-      pull-requests: write
-      checks: read
-      contents: read
     steps:
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Post any failure comments
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.BUILD_STATUS_COMMENT || secrets.GITHUB_TOKEN }}
-        run: |
-          ./.github/scripts/copilot-post-failure-comment.ps1 `
-            -Repository "${{ github.repository }}" `
-            -CheckSuiteId "${{ github.event.check_suite.id }}" `
-            -PullRequestNumber "${{ github.event.check_suite.pull_requests[0].number }}" `
-            -MaxCommentCount 5
+        uses: ./.github/actions/copilot-post-failure-comment
+        with:
+          token: ${{ secrets.BUILD_STATUS_COMMENT }}
+          max-comments: 5
