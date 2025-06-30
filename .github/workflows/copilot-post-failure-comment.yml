@@ -29,4 +29,5 @@ jobs:
           ./.github/scripts/copilot-post-failure-comment.ps1 `
             -Repository "${{ github.repository }}" `
             -CheckSuiteId "${{ github.event.check_suite.id }}" `
-            -PullRequestNumber "${{ github.event.check_suite.pull_requests[0].number }}"
+            -PullRequestNumber "${{ github.event.check_suite.pull_requests[0].number }}" `
+            -MaxCommentCount 5

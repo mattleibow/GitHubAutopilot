@@ -6,6 +6,7 @@
 .DESCRIPTION
     This script analyzes failed check runs from a GitHub check suite and posts
     a formatted comment on the associated PR, specifically targeting AI-created PRs.
+    It includes detection for comment loops to avoid infinite commenting.
 
 .PARAMETER Repository
     The GitHub repository in the format "owner/repo"
@@ -16,8 +17,17 @@
 .PARAMETER PullRequestNumber
     The PR number to comment on
 
+.PARAMETER MaxCommentCount
+    The maximum number of comments allowed before skipping to avoid comment loops. Default is 5.
+
+.PARAMETER DryRun
+    If specified, the script will simulate posting a comment without actually making the API call.
+
 .EXAMPLE
     ./copilot-post-failure-comment.ps1 -Repository "owner/repo" -CheckSuiteId 123456 -PullRequestNumber 42
+
+.EXAMPLE
+    ./copilot-post-failure-comment.ps1 -Repository "owner/repo" -CheckSuiteId 123456 -PullRequestNumber 42 -MaxCommentCount 3 -DryRun
 #>
 
 param(
@@ -28,7 +38,13 @@ param(
     [string]$CheckSuiteId,
     
     [Parameter(Mandatory = $true)]
-    [int]$PullRequestNumber
+    [int]$PullRequestNumber,
+
+    [Parameter(Mandatory = $false)]
+    [int]$MaxCommentCount = 5,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$DryRun
 )
 
 # Fetch PR information to get the author dynamically
@@ -55,6 +71,22 @@ if (-not $isBotPR) {
 }
 
 Write-Host "Processing failed check suite $CheckSuiteId for PR #$PullRequestNumber created by $PullRequestAuthor"
+
+# Fetch existing comments to detect loops
+try {
+    $existingCommentsResponse = gh api `
+        "repos/$Repository/issues/$PullRequestNumber/comments" `
+        -H "Accept: application/vnd.github+json"
+    $existingComments = $existingCommentsResponse | ConvertFrom-Json
+    $commentCount = ($existingComments | Where-Object { $_.body -like '*Build Failed - AI Assistance Needed*' }).Count
+
+    if ($commentCount -ge $MaxCommentCount) {
+        Write-Warning "Comment loop detected. Skipping comment to avoid infinite loop."
+        exit 0
+    }
+} catch {
+    Write-Warning "Failed to fetch existing comments: $($_.Exception.Message)"
+}
 
 try {
     # Fetch Check Runs
@@ -171,9 +203,15 @@ $errorDetailsText
 
     # Add a comment to the PR
     if ($PullRequestNumber -and ($failedJobs.Count -gt 0 -or $errorMessages.Count -gt 0)) {
-        $commentResponse = gh api repos/$Repository/issues/$PullRequestNumber/comments -f body="$commentBody"
-        Write-Host "Comment posted successfully to PR #$PullRequestNumber"
-        Write-Host "Comment URL: $(($commentResponse | ConvertFrom-Json).html_url)"
+        if ($DryRun) {
+            Write-Host "DryRun enabled. Comment not posted."
+            Write-Host "Comment body that would have been posted:"
+            Write-Host $commentBody
+        } else {
+            $commentResponse = gh api repos/$Repository/issues/$PullRequestNumber/comments -f body="$commentBody"
+            Write-Host "Comment posted successfully to PR #$PullRequestNumber"
+            Write-Host "Comment URL: $(($commentResponse | ConvertFrom-Json).html_url)"
+        }
     } else {
         Write-Host "No failures found or PR number missing. No comment posted."
     }

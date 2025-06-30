@@ -13,8 +13,14 @@
 .PARAMETER WorkflowName
     The name of the workflow to approve runs for. Required.
 
+.PARAMETER DryRun
+    If specified, the script will simulate the approval process without actually approving workflows.
+
 .EXAMPLE
-    ./copilot-approve-pending-workflows.ps1 -Repository "mattleibow/GitHubAutopilot" -WorkflowName "Post PR Failure Comments"
+    ./copilot-approve-pending-workflows.ps1 -Repository "owner/repo" -WorkflowName "name of comment workflow"
+
+.EXAMPLE
+    ./copilot-approve-pending-workflows.ps1 -Repository "owner/repo" -WorkflowName "name of comment workflow" -DryRun
 #>
 
 param(
@@ -22,7 +28,9 @@ param(
     [string]$Repository,
 
     [Parameter(Mandatory = $true)]
-    [string]$WorkflowName
+    [string]$WorkflowName,
+
+    [switch]$DryRun
 )
 
 $actionRequiredRuns = gh run list `
@@ -40,8 +48,12 @@ Write-Host "Found $($actionRequiredRuns.Count) workflow run(s) needing attention
 
 foreach ($run in $actionRequiredRuns) {
     try {
-        Write-Host "Approving workflow run: $($run.url)"
-        gh run rerun $($run.databaseId)
+        if ($DryRun) {
+            Write-Host "[DryRun] Would approve workflow run: $($run.url)"
+        } else {
+            Write-Host "Approving workflow run: $($run.url)"
+            gh run rerun $($run.databaseId)
+        }
     } catch {
         Write-Error "Failed to approve workflow run: $($run.url)"
     }
