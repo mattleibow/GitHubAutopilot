@@ -17,7 +17,7 @@ runs:
       shell: pwsh
       # Only run if the check suite failed and there are associated pull requests
       if: >
-        github.event_name == 'check_suite' &&
+        github.event.check_suite != null &&
         github.event.check_suite.conclusion == 'failure' &&
         startsWith(github.event.check_suite.head_branch, 'copilot/') &&
         github.event.check_suite.pull_requests[0] != null
