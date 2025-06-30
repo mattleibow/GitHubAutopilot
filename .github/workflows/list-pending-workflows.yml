@@ -1,9 +1,9 @@
 name: List Pending Workflows
 
 on:
-  workflow_dispatch:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:       # Allows manual triggering
+  schedule:
+    - cron: "*/30 * * * *" # Every 30 minutes
 
 jobs:
   list-pending-workflows:
@@ -12,10 +12,12 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
-    - name: List pending workflows
+        
+    - name: Approve pending comment workflows
       shell: pwsh
-      run: |
-        ./.github/scripts/list-pending-workflows.ps1 -Repository "mattleibow/GitHubAutopilot"
       env:
         GH_TOKEN: ${{ github.token }}
+      run: |
+        ./.github/scripts/list-pending-workflows.ps1 `
+          -Repository "${{ github.repository }}" `
+          -WorkflowName "Post PR Failure Comments"
