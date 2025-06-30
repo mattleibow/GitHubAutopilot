@@ -1,4 +1,4 @@
-name: "Approve Post PR Failure Comments Workflows"
+name: "Copilot Approve Post PR Failure Comments Workflows"
 
 on:
   workflow_dispatch:       # Allows manual triggering
@@ -20,4 +20,4 @@ jobs:
       run: |
         ./.github/scripts/copilot-approve-pending-workflows.ps1 `
           -Repository "${{ github.repository }}" `
-          -WorkflowName "Post PR Failure Comments"
+          -WorkflowName "Copilot Post PR Failure Comments"

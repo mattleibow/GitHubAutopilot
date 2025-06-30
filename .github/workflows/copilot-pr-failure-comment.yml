@@ -1,4 +1,4 @@
-name: "Post PR Failure Comments"
+name: "Copilot Post PR Failure Comments"
 
 on:
   check_suite:
