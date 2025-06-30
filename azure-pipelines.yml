@@ -66,6 +66,7 @@ stages:
       - BuildAndTest_Linux
       - BuildAndTest_macOS
       - BuildAndTest_Windows
+    condition: always()
     jobs:
       - job: PostComment
         displayName: 'Post GitHub Summary Comment'
