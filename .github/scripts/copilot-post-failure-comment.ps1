@@ -65,7 +65,9 @@ try {
 
     # Initialize lists to store failed jobs and error messages
     $failedJobs = @()
+    $errorFiles = @()
     $errorMessages = @()
+    $errorDetails = @()
 
     # Loop through Failed Runs
     foreach ($checkRun in $checkRunsJson.check_runs) {
@@ -79,6 +81,8 @@ try {
             $jobDescription += " - $($checkRun.output.summary)"
         }
         $failedJobs += $jobDescription
+
+        $errorMessages += "### $($checkRun.name) - $($checkRun.conclusion)"
 
         # Get Annotations (if any)
         if ($checkRun.output.annotations_url) {
@@ -94,6 +98,7 @@ try {
                             $normalizedPath = $annotation.path -replace "\\", "/"
                             if ($annotation.message.StartsWith($annotation.path)) {
                                 $messageWithoutPath = $annotation.message.Substring($annotation.path.Length).TrimStart(':', ' ')
+                                $errorFiles += "$normalizedPath`: $messageWithoutPath"
                                 $errorMessages += "$normalizedPath`: $messageWithoutPath"
                             } else {
                                 $errorMessages += "$normalizedPath`: $($annotation.message)"
@@ -110,19 +115,21 @@ try {
 
         # Also check for output text/summary as error details
         if ($checkRun.output.text -and $checkRun.output.text.Trim()) {
-            $errorMessages += "From $($checkRun.name): $($checkRun.output.text)"
+            $errorDetails += $checkRun.output.text
         }
     }
 
     # Remove duplicate error messages and clean them up
-    $errorMessages = $errorMessages | 
+    $errorFiles = $errorFiles | 
         Where-Object { $_ -and $_.Trim() } |
         Sort-Object -Unique |
         ForEach-Object { $_.Trim() }
 
     # Create the comment body
     $failedJobsText = if ($failedJobs.Count -gt 0) { $failedJobs -join "`n" } else { "No specific job failures detected." }
+    $errorFilesText = if ($errorFiles.Count -gt 0) { $errorFiles -join "`n" } else { "No specific error files found." }
     $errorMessagesText = if ($errorMessages.Count -gt 0) { $errorMessages -join "`n" } else { "No specific error messages found." }
+    $errorDetailsText = if ($errorDetails.Count -gt 0) { $errorDetails -join "`n" } else { "No specific error details found." }
 
     $commentBody = @"
 ### 🚨 Build Failed - AI Assistance Needed
@@ -132,10 +139,21 @@ The Azure pipeline has failed for this PR. Here are the details:
 #### Failed Jobs:
 $failedJobsText
 
-#### Error Details:
+#### Errors:
+``````
+$errorFilesText
+``````
+
+<details>
+<summary>See More</summary>
+
 ``````
 $errorMessagesText
 ``````
+
+$errorDetailsText
+
+</details>
 
 @$PullRequestAuthor Please analyze these build failures and suggest fixes. Focus on:
 1. Understanding the root cause of each failure
@@ -153,7 +171,7 @@ $errorMessagesText
 
     # Add a comment to the PR
     if ($PullRequestNumber -and ($failedJobs.Count -gt 0 -or $errorMessages.Count -gt 0)) {
-        $commentResponse = gh api repos/$Repository/issues/$PullRequestNumber/comments -f body="$commentBody"
+        # $commentResponse = gh api repos/$Repository/issues/$PullRequestNumber/comments -f body="$commentBody"
         Write-Host "Comment posted successfully to PR #$PullRequestNumber"
         Write-Host "Comment URL: $(($commentResponse | ConvertFrom-Json).html_url)"
     } else {
