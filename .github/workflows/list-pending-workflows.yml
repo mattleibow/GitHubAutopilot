@@ -1,0 +1,21 @@
+name: List Pending Workflows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+jobs:
+  list-pending-workflows:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: List pending workflows
+      shell: pwsh
+      run: |
+        ./.github/scripts/list-pending-workflows.ps1 -Repository "mattleibow/GitHubAutopilot"
+      env:
+        GH_TOKEN: ${{ github.token }}
