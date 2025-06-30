@@ -21,12 +21,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Post failure comment
+      - name: Post any failure comments
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.BUILD_STATUS_COMMENT || secrets.GITHUB_TOKEN }}
         run: |
-          ./.github/scripts/post-failure-comment.ps1 `
+          ./.github/scripts/copilot-post-failure-comment.ps1 `
             -Repository "${{ github.repository }}" `
             -CheckSuiteId "${{ github.event.check_suite.id }}" `
             -PullRequestNumber "${{ github.event.check_suite.pull_requests[0].number }}"

@@ -17,7 +17,7 @@
     The PR number to comment on
 
 .EXAMPLE
-    ./post-failure-comment.ps1 -Repository "owner/repo" -CheckSuiteId 123456 -PullRequestNumber 42
+    ./copilot-post-failure-comment.ps1 -Repository "owner/repo" -CheckSuiteId 123456 -PullRequestNumber 42
 #>
 
 param(

@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Lists workflow runs that need approval.
+    Approve workflow runs that need approval.
 
 .DESCRIPTION
     This script uses gh CLI to find workflow runs that require manual approval
@@ -14,7 +14,7 @@
     The name of the workflow to approve runs for. Required.
 
 .EXAMPLE
-    ./list-pending-workflows.ps1 -Repository "mattleibow/GitHubAutopilot" -WorkflowName "Post PR Failure Comments"
+    ./copilot-approve-pending-workflows.ps1 -Repository "mattleibow/GitHubAutopilot" -WorkflowName "Post PR Failure Comments"
 #>
 
 param(
