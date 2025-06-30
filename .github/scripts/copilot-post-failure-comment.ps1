@@ -171,7 +171,7 @@ $errorDetailsText
 
     # Add a comment to the PR
     if ($PullRequestNumber -and ($failedJobs.Count -gt 0 -or $errorMessages.Count -gt 0)) {
-        $commentResponse = gh api repos/$Repository/issues/$PullRequestNumber/comments -f body="$commentBody"
+        $commentResponse = gh api repos/\$Repository/issues/$PullRequestNumber/comments -f body="$commentBody"
         Write-Host "Comment posted successfully to PR #$PullRequestNumber"
         Write-Host "Comment URL: $(($commentResponse | ConvertFrom-Json).html_url)"
     } else {
