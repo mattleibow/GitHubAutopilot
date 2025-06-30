@@ -11,6 +11,10 @@ jobs:
     permissions:
       actions: write
     steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Approve pending comment workflows
         uses: ./.github/actions/copilot-approve-pending-workflows
         with:
