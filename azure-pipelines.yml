@@ -75,3 +75,4 @@ stages:
         steps:
           - pwsh: ./scripts/post-build-summary.ps1
             displayName: 'Generate and Post Build Summary Comment'
+          - task: GitHubComment@0

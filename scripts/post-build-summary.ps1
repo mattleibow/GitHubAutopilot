@@ -167,10 +167,13 @@ Write-Output $commentBody
 # Post to PR using GitHub CLI if PR number is available
 if ($PRNumber) {
     Write-Host "Posting comment to PR #$PRNumber in $Repository..."
-    $tempFile = New-TemporaryFile
-    $commentBody | Out-File -FilePath $tempFile -Encoding utf8
-    gh pr comment $PRNumber --repo $Repository --body-file $tempFile
-    Remove-Item $tempFile
+    
+    # $tempFile = New-TemporaryFile
+    # $commentBody | Out-File -FilePath $tempFile -Encoding utf8
+    # gh pr comment $PRNumber --repo $Repository --body-file $tempFile
+    # Remove-Item $tempFile
+
+    Write-Host "##vso[task.setvariable variable=GITHUB_COMMENT]$commentBody"
 } else {
     Write-Warning "No PR number detected. Skipping GitHub comment post."
 }
