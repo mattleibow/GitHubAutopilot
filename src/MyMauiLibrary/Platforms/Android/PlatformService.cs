@@ -6,7 +6,7 @@ public class PlatformService : IPlatformService
     {
         // Android-specific implementation
 
-        SomethingResult = "Android-specific result";
+        SomethingResult = $"Android-specific result (OS version: {Build.VERSION.Release})";
     }
 
     public string SomethingResult { get; private set; } = "Nothing yet";

@@ -40,7 +40,7 @@ stages:
 
         - job: Test_${{ platform.name }}
           displayName: 'Tests on ${{ platform.name }}'
-          #dependsOn: Build_${{ platform.name }}
+          dependsOn: Build_${{ platform.name }}
           pool:
             vmImage: ${{ platform.image }}
           steps:
@@ -59,18 +59,3 @@ stages:
                 codeCoverageTool: 'Cobertura'
                 summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
                 reportDirectory: '$(Agent.TempDirectory)/**/coverage'
-
-  - stage: PostSummaryComment
-    displayName: 'Post Summary Comment'
-    dependsOn: 
-      - BuildAndTest_Linux
-      - BuildAndTest_macOS
-      - BuildAndTest_Windows
-    jobs:
-      - job: PostComment
-        displayName: 'Post GitHub Summary Comment'
-        pool:
-          vmImage: ubuntu-latest
-        steps:
-          - pwsh: ./scripts/post-build-summary.ps1
-            displayName: 'Generate and Post Build Summary Comment'
