@@ -173,7 +173,10 @@ if ($PRNumber) {
     # gh pr comment $PRNumber --repo $Repository --body-file $tempFile
     # Remove-Item $tempFile
 
-    Write-Host "##vso[task.setvariable variable=GITHUB_COMMENT]$commentBody"
+    $singleLine = $commentBody | ConvertTo-Json
+    $singleLine = $singleLine.Trim('"')
+
+    Write-Host "##vso[task.setvariable variable=GITHUB_COMMENT]$singleLine"
 } else {
     Write-Warning "No PR number detected. Skipping GitHub comment post."
 }
