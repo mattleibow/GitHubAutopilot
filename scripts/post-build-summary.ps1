@@ -93,7 +93,7 @@ foreach ($job in $jobRecords) {
                 $errorMessages += "* [See Logs]($CollectionUri/$TeamProject/_build/results?buildId=$BuildId&view=logs&j=$($job.id)&t=$($task.id))"
                 $errorMessages += "* [See Raw Logs]($logUrl)"
             }
-            $errorMessages += "``````"
+            $errorMessages += "<pre>"
             foreach ($issue in $task.issues) {
                 $type = $issue.type
                 if ($type -ne 'error') {
@@ -113,7 +113,7 @@ foreach ($job in $jobRecords) {
                     $errorFiles += $msg
                 }
             }
-            $errorMessages += "``````"
+            $errorMessages += "</pre>"
             $errorMessages += ""
         }
     }
@@ -132,9 +132,9 @@ $commentBody = @"
 $($failedJobs -join "`n")
 
 #### File Errors:
-``````
+<pre>
 $($errorFiles -join "`n")
-``````
+</pre>
 
 @Copilot Please analyze these build failures and suggest fixes. Focus on:
 1. Understanding the root cause of each failure
