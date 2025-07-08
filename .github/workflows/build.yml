@@ -10,6 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
+    env:
+      COPILOT_BUILD_RUN: true
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,6 +24,9 @@ jobs:
 
       - name: Install the .NET MAUI workload
         run: dotnet workload install maui-android
+
+      - name: Validate environment variables
+        run: pwsh ./scripts/validate-env-vars.ps1
 
       - name: Run a build
         run: dotnet build

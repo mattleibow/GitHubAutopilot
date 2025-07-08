@@ -18,3 +18,9 @@ steps:
   - script: dotnet workload install maui
     displayName: 'Install .NET MAUI workload for Windows and macOS'
     condition: ne(variables['Agent.OS'], 'Linux')
+
+  - task: PowerShell@2
+    displayName: 'Validate environment variables'
+    inputs:
+      targetType: 'filePath'
+      filePath: 'scripts/validate-env-vars.ps1'

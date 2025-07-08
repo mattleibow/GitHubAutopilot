@@ -18,6 +18,7 @@ parameters:
 variables:
   buildConfiguration: 'Debug'
   dotnetVersion: '9.0.x'
+  COPILOT_BUILD_RUN: 'true'
 
 stages:
   - ${{ each platform in parameters.platforms }}:
