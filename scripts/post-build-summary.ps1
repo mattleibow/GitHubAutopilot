@@ -93,7 +93,7 @@ foreach ($job in $jobRecords) {
                 $errorMessages += "* [See Logs]($CollectionUri/$TeamProject/_build/results?buildId=$BuildId&view=logs&j=$($job.id)&t=$($task.id))"
                 $errorMessages += "* [See Raw Logs]($logUrl)"
             }
-            $errorMessages += "``````"
+            $errorMessages += "<pre>"
             foreach ($issue in $task.issues) {
                 $type = $issue.type
                 if ($type -ne 'error') {
@@ -113,7 +113,7 @@ foreach ($job in $jobRecords) {
                     $errorFiles += $msg
                 }
             }
-            $errorMessages += "``````"
+            $errorMessages += "</pre>"
             $errorMessages += ""
         }
     }
@@ -132,9 +132,9 @@ $commentBody = @"
 $($failedJobs -join "`n")
 
 #### File Errors:
-``````
+<pre>
 $($errorFiles -join "`n")
-``````
+</pre>
 
 @Copilot Please analyze these build failures and suggest fixes. Focus on:
 1. Understanding the root cause of each failure
@@ -162,15 +162,25 @@ $($errorDetails -join "`n")
 "@
 
 # Output the comment body and post to PR if PR number is available
+Write-Output "Comment as Markdown:"
 Write-Output $commentBody
+
+$markdownInfo = $commentBody | ConvertFrom-Markdown
+
+Write-Output "Comment as HTML:"
+Write-Output $markdownInfo.Html
 
 # Post to PR using GitHub CLI if PR number is available
 if ($PRNumber) {
     Write-Host "Posting comment to PR #$PRNumber in $Repository..."
-    $tempFile = New-TemporaryFile
-    $commentBody | Out-File -FilePath $tempFile -Encoding utf8
-    gh pr comment $PRNumber --repo $Repository --body-file $tempFile
-    Remove-Item $tempFile
+    
+    # $tempFile = New-TemporaryFile
+    # $commentBody | Out-File -FilePath $tempFile -Encoding utf8
+    # gh pr comment $PRNumber --repo $Repository --body-file $tempFile
+    # Remove-Item $tempFile
+
+    $singleLine = $markdownInfo.Html -replace "`n", " "
+    Write-Host "##vso[task.setvariable variable=GITHUB_COMMENT]$singleLine"
 } else {
     Write-Warning "No PR number detected. Skipping GitHub comment post."
 }

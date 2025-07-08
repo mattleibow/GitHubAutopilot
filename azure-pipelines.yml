@@ -40,7 +40,7 @@ stages:
 
         - job: Test_${{ platform.name }}
           displayName: 'Tests on ${{ platform.name }}'
-          #dependsOn: Build_${{ platform.name }}
+          dependsOn: Build_${{ platform.name }}
           pool:
             vmImage: ${{ platform.image }}
           steps:
@@ -66,6 +66,7 @@ stages:
       - BuildAndTest_Linux
       - BuildAndTest_macOS
       - BuildAndTest_Windows
+    condition: always()
     jobs:
       - job: PostComment
         displayName: 'Post GitHub Summary Comment'
@@ -74,3 +75,6 @@ stages:
         steps:
           - pwsh: ./scripts/post-build-summary.ps1
             displayName: 'Generate and Post Build Summary Comment'
+          - task: GitHubComment@0
+            inputs:
+              gitHubConnection: 'mattleibow (1)'
