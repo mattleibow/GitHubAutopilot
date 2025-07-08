@@ -1,0 +1,29 @@
+name: "Copilot Maui PR Failure Comments Action"
+
+description: "Polls dotnet/maui for Copilot PRs with completed check suites and posts build failure comments."
+
+inputs:
+  token:
+    description: 'GitHub token to use for authentication'
+    required: false
+    default: ${{ github.token }}
+  repository:
+    description: 'The repository to poll for PRs'
+    required: false
+    default: ${{ github.repository }}
+  max-comments:
+    description: 'The maximum number of comments to post'
+    required: true
+    default: 5
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Post build failure comments to dotnet/maui Copilot PRs
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        ${{ github.action_path }}/action.ps1 `
+          -Repository ${{ inputs.repository }} `
+          -MaxCommentCount ${{ inputs.max-comments }}

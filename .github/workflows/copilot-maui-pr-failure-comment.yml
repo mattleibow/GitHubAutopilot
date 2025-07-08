@@ -1,0 +1,19 @@
+name: "Copilot Maui PR Failure Comments"
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # Every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  post-maui-failure-comments:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Post build failure comments to mattleibow/GitHubAutopilot Copilot PRs
+        uses: ./.github/actions/copilot-maui-pr-failure-comment
+        with:
+          token: ${{ secrets.BUILD_STATUS_COMMENT }}
+          max-comments: 5
+          repository: "mattleibow/GitHubAutopilot"

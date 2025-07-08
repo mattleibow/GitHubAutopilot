@@ -5,6 +5,10 @@ inputs:
     description: 'GitHub token to use for authentication'
     required: false
     default: ${{ github.token }}
+  repository:
+    description: 'The name of the repository'
+    required: false
+    default: ${{ github.repository }}
   workflow:
     description: 'The name of the workflow to approve'
     required: true
@@ -19,5 +23,5 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
       run: |
         ${{ github.action_path }}/action.ps1 `
-          -Repository "${{ github.repository }}" `
+          -Repository "${{ inputs.repository }}" `
           -WorkflowName "${{ inputs.workflow }}"
