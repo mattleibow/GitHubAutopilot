@@ -76,3 +76,5 @@ stages:
           - pwsh: ./scripts/post-build-summary.ps1
             displayName: 'Generate and Post Build Summary Comment'
           - task: GitHubComment@0
+            inputs:
+              gitHubConnection: 'mattleibow (1)'
