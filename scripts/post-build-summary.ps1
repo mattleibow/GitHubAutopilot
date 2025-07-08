@@ -162,7 +162,13 @@ $($errorDetails -join "`n")
 "@
 
 # Output the comment body and post to PR if PR number is available
+Write-Output "Comment as Markdown:"
 Write-Output $commentBody
+
+$markdownInfo = $commentBody | ConvertFrom-Markdown
+
+Write-Output "Comment as HTML:"
+Write-Output $markdownInfo.Html
 
 # Post to PR using GitHub CLI if PR number is available
 if ($PRNumber) {
@@ -173,9 +179,7 @@ if ($PRNumber) {
     # gh pr comment $PRNumber --repo $Repository --body-file $tempFile
     # Remove-Item $tempFile
 
-    $singleLine = $commentBody | ConvertTo-Json
-    $singleLine = $singleLine.Trim('"')
-
+    $singleLine = $markdownInfo.Html -replace "`n", " "
     Write-Host "##vso[task.setvariable variable=GITHUB_COMMENT]$singleLine"
 } else {
     Write-Warning "No PR number detected. Skipping GitHub comment post."
