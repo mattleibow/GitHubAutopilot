@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      COPILOT_BUILD_RUN: "true"
     
     steps:
       - name: Checkout code
